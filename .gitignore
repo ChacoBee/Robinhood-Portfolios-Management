@@ -32,6 +32,7 @@ test-results/
 
 # Local tools and editors
 .superpowers/
+.worktrees/
 .vercel/
 .idea/
 .vscode/
