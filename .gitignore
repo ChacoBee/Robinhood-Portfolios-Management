@@ -1,0 +1,39 @@
+# Dependencies and builds
+node_modules/
+.next/
+out/
+dist/
+coverage/
+.turbo/
+
+# Local configuration and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+
+# Private financial data and local persistence
+private-data/
+imports/
+uploads/
+exports/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Test and runtime output
+playwright-report/
+test-results/
+.nyc_output/
+*.log
+
+# Local tools and editors
+.superpowers/
+.vercel/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
