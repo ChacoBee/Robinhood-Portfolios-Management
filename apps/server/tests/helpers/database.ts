@@ -9,11 +9,13 @@ export async function createTestDatabase(): Promise<{
 }> {
   const raw = new PGlite();
   await raw.waitReady;
-  const migration = await readFile(
-    new URL('../../drizzle/0000_initial.sql', import.meta.url),
-    'utf8',
-  );
-  await raw.exec(migration);
+  for (const filename of ['0000_initial.sql', '0001_light_jetstream.sql']) {
+    const migration = await readFile(
+      new URL(`../../drizzle/${filename}`, import.meta.url),
+      'utf8',
+    );
+    await raw.exec(migration);
+  }
 
   const wrap = (
     queryable: Pick<PGlite, 'query'>,

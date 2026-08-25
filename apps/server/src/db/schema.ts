@@ -34,7 +34,7 @@ export const accounts = pgTable(
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
     provider: text('provider').notNull(),
-    providerAccountRef: text('provider_account_ref'),
+    providerAccountKey: text('provider_account_key'),
     displayName: text('display_name').notNull(),
     maskedAccountNumber: text('masked_account_number'),
     status: text('status').notNull(),
@@ -45,7 +45,7 @@ export const accounts = pgTable(
     uniqueIndex('accounts_provider_ref_unique').on(
       table.userId,
       table.provider,
-      table.providerAccountRef,
+      table.providerAccountKey,
     ),
     index('accounts_user_idx').on(table.userId),
   ],
@@ -85,6 +85,18 @@ export const syncRuns = pgTable(
     completedAt: timestamp('completed_at', { withTimezone: true, mode: 'string' }),
     sourceAsOf: timestamp('source_as_of', { withTimezone: true, mode: 'string' }),
     failureReason: text('failure_reason'),
+    syncCompleteness: text('sync_completeness'),
+    sourceWindowStart: timestamp('source_window_start', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    sourceWindowEnd: timestamp('source_window_end', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    sourceFingerprint: text('source_fingerprint'),
+    mappingVersion: text('mapping_version'),
+    calculationVersion: text('calculation_version'),
     metadata: jsonb('metadata').$type<Record<string, unknown>>().notNull().default({}),
   },
   (table) => [index('sync_runs_user_started_idx').on(table.userId, table.startedAt)],
@@ -173,6 +185,38 @@ export const quoteObservations = pgTable(
   (table) => [index('quote_observations_security_asof_idx').on(table.securityId, table.sourceAsOf)],
 );
 
+export const optionObservations = pgTable(
+  'option_observations',
+  {
+    id: uuid('id').primaryKey(),
+    syncRunId: uuid('sync_run_id')
+      .notNull()
+      .references(() => syncRuns.id, { onDelete: 'restrict' }),
+    accountId: uuid('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'restrict' }),
+    providerOptionKey: text('provider_option_key').notNull(),
+    symbol: text('symbol').notNull(),
+    quantity: numeric('quantity', { precision: 40, scale: 18 }).notNull(),
+    providerMarketValue: numeric('provider_market_value', {
+      precision: 30,
+      scale: 10,
+    }).notNull(),
+    currency: text('currency').notNull(),
+    detailSupport: text('detail_support').notNull(),
+    observedAt: timestamp('observed_at', { withTimezone: true, mode: 'string' }).notNull(),
+    sourceAsOf: timestamp('source_as_of', { withTimezone: true, mode: 'string' }).notNull(),
+    provenance: jsonb('provenance').$type<Record<string, unknown>>().notNull(),
+  },
+  (table) => [
+    uniqueIndex('option_observations_sync_account_option_unique').on(
+      table.syncRunId,
+      table.accountId,
+      table.providerOptionKey,
+    ),
+  ],
+);
+
 export const accountSnapshots = pgTable(
   'account_snapshots',
   {
@@ -187,6 +231,25 @@ export const accountSnapshots = pgTable(
     modeledTotal: numeric('modeled_total', { precision: 30, scale: 10 }),
     residual: numeric('residual', { precision: 30, scale: 10 }),
     tolerance: numeric('tolerance', { precision: 30, scale: 10 }),
+    supportedPositionValue: numeric('supported_position_value', {
+      precision: 30,
+      scale: 10,
+    }),
+    unsupportedDetailValue: numeric('unsupported_detail_value', {
+      precision: 30,
+      scale: 10,
+    }),
+    cashValue: numeric('cash_value', { precision: 30, scale: 10 }),
+    accruedValue: numeric('accrued_value', { precision: 30, scale: 10 }),
+    inclusionReason: text('inclusion_reason').notNull().default('active'),
+    sourceWindowStart: timestamp('source_window_start', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    sourceWindowEnd: timestamp('source_window_end', {
+      withTimezone: true,
+      mode: 'string',
+    }),
     totalKind: text('total_kind').notNull(),
     included: boolean('included').notNull(),
     reconciliationState: text('reconciliation_state').notNull(),
@@ -221,6 +284,16 @@ export const portfolioSnapshots = pgTable(
     freshness: text('freshness').notNull(),
     reconciliationStatus: text('reconciliation_status').notNull(),
     calculationVersion: text('calculation_version').notNull(),
+    syncCompleteness: text('sync_completeness').notNull().default('complete'),
+    sourceWindowStart: timestamp('source_window_start', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    sourceWindowEnd: timestamp('source_window_end', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    sourceFingerprint: text('source_fingerprint'),
     payload: jsonb('payload').$type<Record<string, unknown>>().notNull(),
     isCurrent: boolean('is_current').notNull().default(false),
     promotedAt: timestamp('promoted_at', { withTimezone: true, mode: 'string' }),
@@ -229,6 +302,11 @@ export const portfolioSnapshots = pgTable(
   },
   (table) => [
     uniqueIndex('portfolio_snapshots_sync_unique').on(table.syncRunId),
+    uniqueIndex('portfolio_snapshots_source_fingerprint_unique').on(
+      table.userId,
+      table.sourceFingerprint,
+      table.calculationVersion,
+    ),
     index('portfolio_snapshots_user_asof_idx').on(table.userId, table.asOf),
     uniqueIndex('portfolio_snapshots_one_current_per_user')
       .on(table.userId)

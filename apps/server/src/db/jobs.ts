@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { DatabaseClient } from './client';
+import type { SafeRefreshFailureCode } from '../sync/failure-codes';
 
 export type JobStatus = 'queued' | 'running' | 'completed' | 'failed';
 
@@ -28,8 +29,17 @@ export interface JobRecord {
 export interface JobRepository {
   enqueueUnique(input: EnqueueJobInput): Promise<JobRecord>;
   claimNext(workerId: string, leaseSeconds?: number): Promise<JobRecord | null>;
+  renewLease(
+    jobId: string,
+    workerId: string,
+    leaseSeconds?: number,
+  ): Promise<boolean>;
   complete(jobId: string, workerId: string): Promise<boolean>;
-  fail(jobId: string, workerId: string, error: string): Promise<boolean>;
+  fail(
+    jobId: string,
+    workerId: string,
+    error: SafeRefreshFailureCode,
+  ): Promise<boolean>;
 }
 
 interface JobRow {
@@ -162,6 +172,21 @@ export function createJobRepository(database: DatabaseClient): JobRepository {
          where id = $1 and status = 'running' and lease_owner = $2
          returning id`,
         [jobId, workerId],
+      );
+      return result.rows.length === 1;
+    },
+
+    async renewLease(jobId, workerId, leaseSeconds = 60) {
+      const result = await database.query<{ id: string }>(
+        `update jobs
+         set lease_expires_at = now() + ($3 * interval '1 second'),
+             updated_at = now()
+         where id = $1
+           and status = 'running'
+           and lease_owner = $2
+           and lease_expires_at > now()
+         returning id`,
+        [jobId, workerId, leaseSeconds],
       );
       return result.rows.length === 1;
     },

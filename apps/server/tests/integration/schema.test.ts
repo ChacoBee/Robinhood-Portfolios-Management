@@ -27,6 +27,7 @@ describe('initial PostgreSQL schema', () => {
         'position_observations',
         'cash_observations',
         'quote_observations',
+        'option_observations',
         'account_snapshots',
         'portfolio_snapshots',
         'transactions',
