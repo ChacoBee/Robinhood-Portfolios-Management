@@ -13,7 +13,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Untitled site',
+  title: 'Aurum — Portfolio intelligence',
+  description:
+    'A private-ready, read-only portfolio dashboard with transparent data provenance.',
 };
 
 export default function RootLayout({
