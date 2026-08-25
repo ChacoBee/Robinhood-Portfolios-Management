@@ -148,16 +148,16 @@ Semantic tokens are distinct: `accent-gold` is only for action/selection; `warni
 - Next.js-compatible React application written in TypeScript.
 - Tailwind CSS plus accessible headless primitives and a custom Obsidian Gold design system.
 - Apache ECharts for interactive time series and allocation visualizations.
-- Server/API modules and a Node/TypeScript sync worker in the same repository and domain model.
+- A Sites-compatible Vinext/App Router frontend plus a Node/TypeScript API and sync worker in the same repository and domain model.
 - PostgreSQL with Drizzle ORM; production access uses TLS and a transaction-capable, pool-aware driver.
 - PostgreSQL-backed job coordination initially; no separate queue service until measured load requires one.
 - S3-compatible encrypted object storage for retained import evidence and generated exports.
 - Clerk for managed passkey authentication, a server-enforced email allowlist, application-held hashed recovery codes, secure sessions, and production fail-closed configuration.
 - Resend for email, standards-based VAPID web push, and an optional Polygon market-data adapter for compatible benchmark data.
 
-Connected production uses Next.js standalone Node/container output on a container-capable runtime. The web process and one dedicated worker process run from the same image and repository; schema migrations run as a separate release step. The runtime must provide persistent worker execution, managed secrets, scheduled triggers, outbound HTTPS, and TLS access to PostgreSQL. Modules communicate through typed application services, not network calls inside the monolith.
+The repository is a small workspace with three boundaries: `apps/web` is the Vinext/App Router presentation surface, `apps/server` is the Node API plus worker entry points, and `packages/domain` contains shared validated contracts and pure calculations. The browser calls only the typed HTTPS API in connected mode. Domain modules remain one modular system rather than separately owned microservices.
 
-OpenAI Sites may host a synthetic Demo-mode preview only. It is not a dependency of connected production unless its worker, scheduler, secret, and PostgreSQL requirements are explicitly verified. The connected-production reference target is a Docker deployment with separate web and worker services plus managed PostgreSQL; deployment-provider credentials remain an operator step.
+OpenAI Sites hosts the synthetic Demo preview and may host the connected presentation surface because it needs only outbound HTTPS to the API. It never receives Robinhood or database credentials. Connected production deploys the Node API and one dedicated worker from the same Docker image on a container-capable runtime; schema migrations run as a separate release step. That runtime provides persistent worker execution, managed secrets, scheduled triggers, outbound HTTPS, and TLS access to PostgreSQL. Deployment-provider credentials remain an operator step.
 
 ### Module boundaries
 
