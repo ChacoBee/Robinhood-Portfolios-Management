@@ -16,6 +16,17 @@ export const metadata: Metadata = {
   title: 'Aurum — Portfolio intelligence',
   description:
     'A private-ready, read-only portfolio dashboard with transparent data provenance.',
+  openGraph: {
+    title: 'Aurum',
+    description: 'Portfolio intelligence, without the noise',
+    images: [{ url: '/og.png', width: 1200, height: 630, alt: 'Aurum' }],
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'Aurum',
+    description: 'Portfolio intelligence, without the noise',
+    images: ['/og.png'],
+  },
 };
 
 export default function RootLayout({
