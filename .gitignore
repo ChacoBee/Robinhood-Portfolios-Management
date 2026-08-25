@@ -5,6 +5,7 @@ out/
 dist/
 coverage/
 .turbo/
+*.tsbuildinfo
 
 # Local configuration and credentials
 .env
