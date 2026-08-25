@@ -15,6 +15,13 @@
       "when": 1787693628543,
       "tag": "0001_light_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1787701847615,
+      "tag": "0002_wooden_adam_warlock",
+      "breakpoints": true
     }
   ]
 }

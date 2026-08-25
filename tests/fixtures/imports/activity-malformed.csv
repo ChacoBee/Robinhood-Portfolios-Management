@@ -1,0 +1,3 @@
+date,type,amount,description,transaction_id
+not-a-date,deposit,one hundred,Synthetic malformed row,syn-bad-001
+2026-08-02,mystery,10.00,Synthetic unknown event,syn-bad-002

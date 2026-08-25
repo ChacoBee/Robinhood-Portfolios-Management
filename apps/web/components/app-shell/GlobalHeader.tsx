@@ -1,44 +1,21 @@
-'use client';
-
-import { useState } from 'react';
+import { RefreshControl } from './RefreshControl';
 import { ScreenPrivacyToggle } from './ScreenPrivacyToggle';
 
-export function GlobalHeader({ freshness }: { freshness: string }) {
-  const [refreshing, setRefreshing] = useState(false);
-
-  function refreshPreview() {
-    if (refreshing) return;
-    setRefreshing(true);
-    window.setTimeout(() => setRefreshing(false), 900);
-  }
-
+export function GlobalHeader({ mode, apiBaseUrl }: { mode: 'demo' | 'connected'; apiBaseUrl: string }) {
   return (
     <header className="global-header">
       <div className="header-title">
         <p className="eyebrow">All portfolios</p>
-        <p className="header-account-count">Three synthetic accounts</p>
+        <p className="header-account-count">Read-only portfolio workspace</p>
       </div>
-
       <div className="header-actions">
-        <div className="freshness-copy">
-          <span className="demo-badge">Synthetic Demo</span>
-          <small>{freshness}</small>
-        </div>
+        <span className="source-badge">
+          <span aria-hidden="true" className="source-dot" />
+          {mode === 'demo' ? 'Synthetic Demo' : 'Connected mode'}
+        </span>
         <ScreenPrivacyToggle />
-        <button
-          aria-label="Refresh synthetic data"
-          className="icon-button"
-          disabled={refreshing}
-          onClick={refreshPreview}
-          type="button"
-        >
-          <span aria-hidden="true" className={refreshing ? 'is-spinning' : ''}>
-            ↻
-          </span>
-        </button>
-        <button className="avatar-button" type="button" aria-label="Open profile menu">
-          CB
-        </button>
+        <RefreshControl apiBaseUrl={apiBaseUrl} mode={mode} />
+        <span aria-label="Aurum workspace" className="avatar-button" role="img"><span aria-hidden="true">A</span></span>
       </div>
     </header>
   );

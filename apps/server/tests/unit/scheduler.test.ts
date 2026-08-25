@@ -47,4 +47,18 @@ describe('connected refresh scheduler', () => {
     });
     expect(await complete.scheduler.tick()).toBe(0);
   });
+
+  it('enqueues exactly one persisted off-hours checkpoint per trading date', async () => {
+    const due = schedulerAt('2026-08-25T23:00:00.000Z', {
+      lastSuccessfulRefreshAt: '2026-08-25T19:59:00.000Z',
+      currentSnapshotAsOf: '2026-08-25T20:00:00.000Z',
+    });
+    expect(await due.scheduler.tick()).toBe(1);
+
+    const complete = schedulerAt('2026-08-25T23:00:00.000Z', {
+      lastSuccessfulRefreshAt: '2026-08-25T22:30:00.000Z',
+      currentSnapshotAsOf: '2026-08-25T22:29:30.000Z',
+    });
+    expect(await complete.scheduler.tick()).toBe(0);
+  });
 });

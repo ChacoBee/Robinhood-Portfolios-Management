@@ -33,6 +33,12 @@ export interface RefreshServiceDependencies {
   now?: () => Date;
   createId?: () => string;
   disconnectProvider?: (userId: string) => Promise<void>;
+  afterSnapshotPromoted?: (input: {
+    userId: string;
+    snapshotId: string;
+    sourceAsOf: string;
+    calculationVersion: string;
+  }) => Promise<void>;
   valuationSession: () => {
     phase: ValuationSessionPhase;
     lastRegularCloseAt: string | null;
@@ -206,6 +212,25 @@ export class RefreshService {
           },
         },
       });
+
+      if (persisted.promoted && this.dependencies.afterSnapshotPromoted) {
+        try {
+          await this.dependencies.afterSnapshotPromoted({
+            userId: job.userId,
+            snapshotId: persisted.snapshotId,
+            sourceAsOf: promotion.asOf,
+            calculationVersion: promotion.calculationVersion,
+          });
+        } catch {
+          await this.dependencies.audit.append({
+            userId: job.userId,
+            actor: 'sync_worker',
+            action: 'alert_evaluation_failed',
+            scope: persisted.snapshotId,
+            metadata: { failureCode: 'alert_evaluation_failed' },
+          });
+        }
+      }
 
       return {
         state: 'promoted',

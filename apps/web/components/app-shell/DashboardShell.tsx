@@ -1,20 +1,43 @@
 'use client';
 
-import type { PreviewPortfolio } from '../../lib/demo/preview-fixture';
+import { useEffect, type ReactNode } from 'react';
 import { ScreenPrivacyProvider } from '../../lib/privacy/privacy-context';
-import { OverviewScreen } from '../overview/OverviewScreen';
 import { DesktopSideRail } from './DesktopSideRail';
 import { GlobalHeader } from './GlobalHeader';
 import { MobileTabBar } from './MobileTabBar';
 
-export function DashboardShell({ portfolio }: { portfolio: PreviewPortfolio }) {
+export function DashboardShell({
+  children,
+  mode,
+  apiBaseUrl,
+}: {
+  children: ReactNode;
+  mode: 'demo' | 'connected';
+  apiBaseUrl: string;
+}) {
+  useEffect(() => {
+    // Vinext can hydrate nested client islands immediately after the shell.
+    // Keep SSR buttons inert for two frames so a visible control can never be
+    // clicked before its event handler is attached.
+    let secondFrame = 0;
+    const firstFrame = window.requestAnimationFrame(() => {
+      secondFrame = window.requestAnimationFrame(() => {
+        document.body.dataset.aurumHydrated = 'true';
+      });
+    });
+    return () => {
+      window.cancelAnimationFrame(firstFrame);
+      if (secondFrame) window.cancelAnimationFrame(secondFrame);
+    };
+  }, []);
+
   return (
     <ScreenPrivacyProvider>
       <div className="app-shell">
-        <DesktopSideRail />
+        <DesktopSideRail mode={mode} />
         <div className="app-frame">
-          <GlobalHeader freshness={portfolio.asOf} />
-          <OverviewScreen portfolio={portfolio} />
+          <GlobalHeader apiBaseUrl={apiBaseUrl} mode={mode} />
+          {children}
         </div>
         <MobileTabBar />
       </div>

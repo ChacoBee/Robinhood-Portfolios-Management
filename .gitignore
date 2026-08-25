@@ -16,10 +16,10 @@ coverage/
 *.p12
 
 # Private financial data and local persistence
-private-data/
-imports/
-uploads/
-exports/
+/private-data/
+/imports/
+/uploads/
+/exports/
 *.db
 *.db-journal
 *.sqlite

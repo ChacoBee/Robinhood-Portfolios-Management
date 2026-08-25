@@ -1,0 +1,2 @@
+date,type,amount,description,transaction_id
+2026-08-01,deposit,10.00,"=HYPERLINK(""https://invalid.example"",""click"")",syn-formula-001

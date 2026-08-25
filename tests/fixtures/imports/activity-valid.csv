@@ -1,0 +1,6 @@
+date,type,amount,description,transaction_id
+2026-08-01,deposit,1000.00,Synthetic funding,syn-tx-001
+2026-08-03,buy,-420.50,Synthetic purchase,syn-tx-002
+2026-08-10,dividend,8.25,Synthetic distribution,syn-tx-003
+2026-08-15,interest,1.42,Synthetic interest,syn-tx-004
+2026-08-20,fee,-0.25,Synthetic regulatory fee,syn-tx-005

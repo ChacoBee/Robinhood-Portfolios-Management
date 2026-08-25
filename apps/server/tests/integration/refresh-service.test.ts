@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { AllowedRobinhoodTool } from '../../src/robinhood/read-methods';
 import { RobinhoodReadClient } from '../../src/robinhood/client';
 import type { McpTransport } from '../../src/robinhood/transport';
@@ -90,7 +90,15 @@ afterEach(async () => {
   await Promise.all(openDatabases.splice(0).map((close) => close()));
 });
 
-async function setup(fixtures = structuredClone(baseFixtures)) {
+async function setup(
+  fixtures = structuredClone(baseFixtures),
+  afterSnapshotPromoted?: (input: {
+    userId: string;
+    snapshotId: string;
+    sourceAsOf: string;
+    calculationVersion: string;
+  }) => Promise<void>,
+) {
   const database = await createTestDatabase();
   openDatabases.push(database.close);
   const repositories = createRepositories(database.client, {
@@ -112,6 +120,7 @@ async function setup(fixtures = structuredClone(baseFixtures)) {
       phase: 'regular',
       lastRegularCloseAt: null,
     }),
+    ...(afterSnapshotPromoted ? { afterSnapshotPromoted } : {}),
   });
   return { ownerId, repositories, service, transport, database };
 }
@@ -135,6 +144,26 @@ describe('coherent Robinhood refresh', () => {
       freshness: 'fresh',
       reconciliationStatus: 'reconciled',
     });
+  });
+
+  it('invokes alert evaluation only after the snapshot transaction is promoted', async () => {
+    const afterSnapshotPromoted = vi.fn(async () => undefined);
+    const { ownerId, service, repositories } = await setup(
+      structuredClone(baseFixtures),
+      afterSnapshotPromoted,
+    );
+    await service.request(ownerId, 'manual');
+
+    const result = await service.runNext('sync-worker-a');
+
+    expect(result).toMatchObject({ state: 'promoted' });
+    expect(afterSnapshotPromoted).toHaveBeenCalledWith({
+      userId: ownerId,
+      snapshotId: expect.any(String),
+      sourceAsOf: '2026-08-25T14:00:20.000Z',
+      calculationVersion: 'portfolio-v1',
+    });
+    await expect(repositories.portfolios.getCurrent(ownerId)).resolves.not.toBeNull();
   });
 
   it('preserves the last-good snapshot after a provider failure', async () => {

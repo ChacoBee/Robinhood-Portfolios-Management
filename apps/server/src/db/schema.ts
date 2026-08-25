@@ -18,13 +18,19 @@ const auditColumns = {
     .defaultNow(),
 };
 
-export const users = pgTable('users', {
-  id: uuid('id').primaryKey(),
-  email: text('email').notNull().unique(),
-  clerkUserId: text('clerk_user_id').unique(),
-  screenPrivacyDefault: boolean('screen_privacy_default').notNull().default(false),
-  ...auditColumns,
-});
+export const users = pgTable(
+  'users',
+  {
+    id: uuid('id').primaryKey(),
+    email: text('email').notNull(),
+    clerkUserId: text('clerk_user_id').unique(),
+    screenPrivacyDefault: boolean('screen_privacy_default').notNull().default(false),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex('users_email_normalized_unique').on(sql`lower(${table.email})`),
+  ],
+);
 
 export const accounts = pgTable(
   'accounts',

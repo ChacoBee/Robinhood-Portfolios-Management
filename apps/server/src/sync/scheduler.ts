@@ -29,6 +29,13 @@ export class RefreshScheduler {
         closeAt !== null &&
         owner.currentSnapshotAsOf !== null &&
         Date.parse(owner.currentSnapshotAsOf) >= Date.parse(closeAt);
+      const lastRefreshContext = owner.lastSuccessfulRefreshAt
+        ? resolveUsEquitySession(new Date(owner.lastSuccessfulRefreshAt))
+        : null;
+      const lastOffHoursCheckpointDate =
+        lastRefreshContext && lastRefreshContext.phase !== 'regular'
+          ? lastRefreshContext.scheduleWindow.tradingDate
+          : null;
       const decision = evaluateSchedule({
         now: now.toISOString(),
         session: context.scheduleWindow,
@@ -37,10 +44,14 @@ export class RefreshScheduler {
         lastRegularCloseTradingDate: currentReachedClose
           ? context.scheduleWindow.tradingDate
           : null,
-        lastOffHoursCheckpointDate: null,
+        lastOffHoursCheckpointDate,
       });
 
-      if (decision.backgroundEligible || decision.regularCloseSnapshotDue) {
+      if (
+        decision.backgroundEligible ||
+        decision.regularCloseSnapshotDue ||
+        decision.offHoursCheckpointDue
+      ) {
         await this.dependencies.refresh.request(owner.userId, 'scheduled');
         enqueued += 1;
       }
@@ -60,4 +71,3 @@ export async function runRefreshSchedulerLoop(
     await delay(intervalMs, undefined, { signal: options.signal });
   }
 }
-

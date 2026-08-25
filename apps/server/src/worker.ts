@@ -10,6 +10,8 @@ import type { VerifiedRobinhoodAuthorizationProvider } from './robinhood/authori
 import { RefreshService } from './sync/refresh-service';
 import { resolveUsEquitySession } from './sync/market-calendar';
 import { runRefreshWorkerLoop } from './sync/worker-loop';
+import { loadTrustedComposition } from './runtime/composition-loader';
+import { bootstrapConfiguredOwner } from './runtime/owner-bootstrap';
 import {
   RefreshScheduler,
   runRefreshSchedulerLoop,
@@ -22,6 +24,12 @@ export interface TrustedRobinhoodWorkerComposition {
   expectedAudience: string;
   authorizationProvider: VerifiedRobinhoodAuthorizationProvider;
   fetchImplementation?: typeof fetch;
+  afterSnapshotPromoted: (input: {
+    userId: string;
+    snapshotId: string;
+    sourceAsOf: string;
+    calculationVersion: string;
+  }) => Promise<void>;
 }
 
 /**
@@ -36,33 +44,52 @@ export async function startWorker(
   if (config.APP_MODE !== 'connected') {
     throw new Error('connected_mode_required');
   }
-  if (!trustedComposition) {
+  const resolvedComposition =
+    trustedComposition ??
+    (await loadTrustedComposition<TrustedRobinhoodWorkerComposition>(
+      environment.AURUM_TRUSTED_COMPOSITION_MODULE,
+      'createWorkerComposition',
+    ));
+  if (!resolvedComposition) {
     throw new Error('verified_robinhood_authorization_required');
+  }
+  if (!resolvedComposition.afterSnapshotPromoted) {
+    throw new Error('alert_evaluation_composition_required');
   }
 
   const vault = new AesGcmAccountReferenceVault(
     config.ACCOUNT_REFERENCE_ENCRYPTION_KEY,
   );
   const transport = new HttpMcpTransport({
-    endpoint: trustedComposition.endpoint,
-    approvedEndpointOrigins: trustedComposition.approvedEndpointOrigins,
-    expectedIssuer: trustedComposition.expectedIssuer,
-    expectedAudience: trustedComposition.expectedAudience,
-    authorizationProvider: trustedComposition.authorizationProvider,
-    ...(trustedComposition.fetchImplementation
-      ? { fetchImplementation: trustedComposition.fetchImplementation }
+    endpoint: resolvedComposition.endpoint,
+    approvedEndpointOrigins: resolvedComposition.approvedEndpointOrigins,
+    expectedIssuer: resolvedComposition.expectedIssuer,
+    expectedAudience: resolvedComposition.expectedAudience,
+    authorizationProvider: resolvedComposition.authorizationProvider,
+    ...(resolvedComposition.fetchImplementation
+      ? { fetchImplementation: resolvedComposition.fetchImplementation }
       : {}),
   });
   const database = createPostgresClient(config.DATABASE_URL);
   const repositories = createRepositories(database, {
     providerIdentifierKeyer: vault,
   });
+  try {
+    await bootstrapConfiguredOwner(repositories.portfolios, {
+      clerkUserId: config.OWNER_CLERK_USER_ID,
+      email: config.OWNER_EMAIL,
+    });
+  } catch (error) {
+    await database.close();
+    throw error;
+  }
   const client = new RobinhoodReadClient(transport, vault);
   const service = new RefreshService({
     client,
     portfolios: repositories.portfolios,
     jobs: repositories.jobs,
     audit: repositories.audit,
+    afterSnapshotPromoted: resolvedComposition.afterSnapshotPromoted,
     valuationSession: () => {
       const context = resolveUsEquitySession(new Date());
       return {

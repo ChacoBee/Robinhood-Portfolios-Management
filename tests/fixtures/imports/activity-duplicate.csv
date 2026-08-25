@@ -1,0 +1,2 @@
+date,type,amount,description,transaction_id
+2026-08-01,deposit,1000.00,Synthetic funding,syn-tx-001

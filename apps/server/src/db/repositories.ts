@@ -13,6 +13,7 @@ import type {
 export interface CreateOwnerInput {
   id: string;
   email: string;
+  clerkUserId?: string;
 }
 
 export interface PromotePortfolioSnapshotInput {
@@ -116,6 +117,7 @@ export interface AlertRepository {
   appendEvent(input: {
     id: string;
     ruleId: string;
+    snapshotId: string | null;
     fingerprint: string;
     state: string;
     evidence: Record<string, unknown>;
@@ -204,12 +206,40 @@ function createPortfolioRepository(
 ): PortfolioRepository {
   return {
     async createOwner(input) {
-      await database.query(
-        `insert into users (id, email)
-         values ($1, lower($2))
-         on conflict (id) do update set email = excluded.email`,
-        [input.id, input.email],
-      );
+      await database.transaction(async (transaction) => {
+        const clerkUserId = input.clerkUserId ?? null;
+        const matches = await transaction.query<{ id: string }>(
+          `select id
+           from users
+           where id = $1
+              or lower(email) = lower($2)
+              or ($3::text is not null and clerk_user_id = $3)
+           for update`,
+          [input.id, input.email, clerkUserId],
+        );
+        const matchingIds = [...new Set(matches.rows.map((row) => row.id))];
+        if (matchingIds.length > 1) {
+          throw new Error('configured_owner_identity_conflict');
+        }
+        if (matchingIds[0]) {
+          await transaction.query(
+            `update users
+             set email = lower($2),
+                 clerk_user_id = coalesce($3, clerk_user_id)
+             where id = $1`,
+            [matchingIds[0], input.email, clerkUserId],
+          );
+          return;
+        }
+        await transaction.query(
+          `insert into users (id, email, clerk_user_id)
+           values ($1, lower($2), $3)
+           on conflict (id) do update
+           set email = excluded.email,
+               clerk_user_id = coalesce(excluded.clerk_user_id, users.clerk_user_id)`,
+          [input.id, input.email, clerkUserId],
+        );
+      });
     },
 
     async startSyncRun(input) {
@@ -810,12 +840,13 @@ function createAlertRepository(database: DatabaseClient): AlertRepository {
     async appendEvent(input) {
       await database.query(
         `insert into alert_events (
-           id, rule_id, fingerprint, state, evidence
-         ) values ($1, $2, $3, $4, $5::jsonb)
+           id, rule_id, snapshot_id, fingerprint, state, evidence
+         ) values ($1, $2, $3, $4, $5, $6::jsonb)
          on conflict (fingerprint) do nothing`,
         [
           input.id,
           input.ruleId,
+          input.snapshotId,
           input.fingerprint,
           input.state,
           JSON.stringify(input.evidence),

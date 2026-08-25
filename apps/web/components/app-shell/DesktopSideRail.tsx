@@ -1,48 +1,41 @@
-const primaryNavigation = [
-  ['Overview', 'O'],
-  ['Accounts', 'A'],
-  ['Holdings', 'H'],
-  ['Performance', 'P'],
-  ['Analytics', 'N'],
-  ['Activity', 'T'],
-  ['Alerts', '!'],
-  ['Settings', 'S'],
-] as const;
+'use client';
 
-export function DesktopSideRail() {
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
+import { pathIsActive, primaryNavigation } from './navigation';
+
+export function DesktopSideRail({ mode }: { mode: 'demo' | 'connected' }) {
+  const pathname = usePathname();
+
   return (
     <aside aria-label="Primary" className="side-rail">
-      <a className="brand" href="#overview" aria-label="Aurum overview">
-        <span aria-hidden="true" className="brand-mark">
-          A
-        </span>
+      <Link className="brand" href="/" aria-label="Aurum overview">
+        <span aria-hidden="true" className="brand-mark">A</span>
         <span>
           <strong>Aurum</strong>
           <small>Portfolio intelligence</small>
         </span>
-      </a>
+      </Link>
 
       <nav className="side-navigation">
-        {primaryNavigation.map(([label, glyph], index) => (
-          <a
-            aria-current={index === 0 ? 'page' : undefined}
+        {primaryNavigation.map((item) => (
+          <Link
+            aria-current={pathIsActive(pathname, item.href) ? 'page' : undefined}
             className="nav-link"
-            href={index === 0 ? '#overview' : `#${label.toLowerCase()}`}
-            key={label}
+            href={item.href}
+            key={item.href}
           >
-            <span aria-hidden="true" className="nav-glyph">
-              {glyph}
-            </span>
-            {label}
-          </a>
+            <span aria-hidden="true" className="nav-glyph">{item.glyph}</span>
+            {item.label}
+          </Link>
         ))}
       </nav>
 
       <div className="rail-connection">
         <span aria-hidden="true" className="connection-dot" />
         <span>
-          <strong>Demo workspace</strong>
-          <small>No brokerage connected</small>
+          <strong>{mode === 'demo' ? 'Demo workspace' : 'Connected mode'}</strong>
+          <small>{mode === 'demo' ? 'No brokerage connected' : 'Verification required'}</small>
         </span>
       </div>
     </aside>

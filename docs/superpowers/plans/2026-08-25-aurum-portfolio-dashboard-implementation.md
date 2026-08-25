@@ -374,15 +374,22 @@ export const EnvironmentSchema = z.discriminatedUnion("APP_MODE", [
     APP_MODE: z.literal("connected"),
     NODE_ENV: z.enum(["development", "test", "production"]),
     DATABASE_URL: z.string().url(),
+    OWNER_CLERK_USER_ID: z.string().min(1),
     OWNER_EMAIL: z.string().email(),
+    WEB_ORIGIN: z.string().url(),
+    CLERK_PUBLISHABLE_KEY: z.string().min(1),
+    CLERK_ISSUER_URL: z.string().url(),
     CLERK_SECRET_KEY: z.string().min(20),
-    ROBINHOOD_MCP_URL: z.string().url(),
-    ROBINHOOD_READONLY_SCOPES: z.string().min(1)
+    CSRF_SECRET: z.string().min(32),
+    ACCOUNT_REFERENCE_ENCRYPTION_KEY: z.string().min(1)
   })
 ]);
 ```
 
-Demo mode must not read live-provider keys. Connected mode rejects missing fields at startup.
+Demo mode must not read live-provider keys. Connected mode rejects missing
+fields at startup. Robinhood endpoints, scopes, and tokens are deliberately not
+environment variables; a trusted application composition injects a verified
+read-only grant provider and the worker pins the approved MCP origin.
 
 - [ ] **Step 5: Generate, inspect, test, and commit the migration**
 
