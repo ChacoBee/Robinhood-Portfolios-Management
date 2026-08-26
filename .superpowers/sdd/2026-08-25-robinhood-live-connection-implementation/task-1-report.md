@@ -47,7 +47,7 @@ git diff --check
 
 ## Commit
 
-`PENDING_AMEND`
+`fbb28bb` (`feat: normalize live Robinhood portfolio payloads`)
 
 ## Self-review
 
