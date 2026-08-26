@@ -1,13 +1,24 @@
 import {
-  mapAccount, mapEquityPosition, mapOptionPosition, mapPortfolio, mapQuote,
-  type AccountObservation, type AccountValueObservation, type EquityPositionObservation,
-  type EquityQuoteObservation, type OptionInstrumentObservation, type OptionPositionObservation,
+  mapAccount,
+  mapEquityPosition,
+  mapOptionPosition,
+  mapPortfolio,
+  mapQuote,
+  type AccountObservation,
+  type AccountValueObservation,
+  type EquityPositionObservation,
+  type EquityQuoteObservation,
+  type OptionInstrumentObservation,
+  type OptionPositionObservation,
   type OptionQuoteObservation,
 } from './mapper';
 import {
-  ProviderAccountsResponseSchema, ProviderEquityPositionsResponseSchema,
-  ProviderOptionInstrumentsResponseSchema, ProviderOptionPositionsResponseSchema,
-  ProviderOptionQuotesResponseSchema, ProviderPortfolioResponseSchema,
+  ProviderAccountsResponseSchema,
+  ProviderEquityPositionsResponseSchema,
+  ProviderOptionInstrumentsResponseSchema,
+  ProviderOptionPositionsResponseSchema,
+  ProviderOptionQuotesResponseSchema,
+  ProviderPortfolioResponseSchema,
   ProviderQuotesResponseSchema,
 } from './schemas';
 import type { ProviderEquityPosition, ProviderOptionPosition } from './schemas';
@@ -15,23 +26,43 @@ import type { McpTransport } from './transport';
 import type { AccountReferenceVault, EncryptedAccountReference } from './vault';
 import { parseProvider, ProviderBoundaryError } from './errors';
 
-export interface QuoteRequest { instrumentId: string; symbol: string; }
+export interface QuoteRequest {
+  instrumentId: string;
+  symbol: string;
+}
+
 const batch = <T>(values: readonly T[]): readonly T[][] =>
-  Array.from({ length: Math.ceil(values.length / 20) }, (_, index) => values.slice(index * 20, index * 20 + 20));
-function assertUnique(values: readonly string[]): void { if (new Set(values).size !== values.length) throw new ProviderBoundaryError('provider_schema_drift'); }
+  Array.from({ length: Math.ceil(values.length / 20) }, (_, index) =>
+    values.slice(index * 20, index * 20 + 20),
+  );
+
+function assertUnique(values: readonly string[]): void {
+  if (new Set(values).size !== values.length) {
+    throw new ProviderBoundaryError('provider_schema_drift');
+  }
+}
+
 function requireRows<T>(rows: readonly (T | null)[]): readonly T[] {
-  if (rows.some((row) => row === null)) throw new ProviderBoundaryError('provider_schema_drift');
+  if (rows.some((row) => row === null)) {
+    throw new ProviderBoundaryError('provider_schema_drift');
+  }
   return rows as readonly T[];
 }
 
 export class RobinhoodReadClient {
   private readonly now: () => Date;
 
-  constructor(private readonly transport: McpTransport, private readonly vault: AccountReferenceVault, now?: () => Date) {
+  constructor(
+    private readonly transport: McpTransport,
+    private readonly vault: AccountReferenceVault,
+    now?: () => Date,
+  ) {
     this.now = now ?? (() => new Date());
   }
 
-  private receivedAt(): string { return this.now().toISOString(); }
+  private receivedAt(): string {
+    return this.now().toISOString();
+  }
 
   private async readPages(
     tool: 'get_equity_positions' | 'get_option_positions',

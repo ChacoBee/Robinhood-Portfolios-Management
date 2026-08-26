@@ -1,5 +1,10 @@
 import Decimal from 'decimal.js';
-import { usd, type AccountStatus, type AccountTotalKind, type Money } from '@aurum/domain';
+import {
+  usd,
+  type AccountStatus,
+  type AccountTotalKind,
+  type Money,
+} from '@aurum/domain';
 import type {
   ProviderAccount,
   ProviderEquityPosition,
@@ -8,19 +13,92 @@ import type {
   ProviderQuote,
 } from './schemas';
 import { ProviderBoundaryError } from './errors';
-import type { AccountReferenceVault, EncryptedAccountReference, StableAccountKey } from './vault';
+import type {
+  AccountReferenceVault,
+  EncryptedAccountReference,
+  StableAccountKey,
+} from './vault';
 
 export type UnavailableMoneyReason =
-  | 'provider_total_missing' | 'cash_missing' | 'accrued_missing'
-  | 'provider_market_value_missing' | 'cost_basis_missing' | 'unsupported_currency';
-export type AvailableMoney = { state: 'available'; value: Money } | { state: 'unavailable'; reason: UnavailableMoneyReason };
-export interface AccountObservation { providerRef: EncryptedAccountReference; stableKey: StableAccountKey; maskedAccountNumber: string | null; displayName: string; status: AccountStatus; totalKind: AccountTotalKind; sourceAsOf: string; }
-export interface AccountValueObservation { providerRef: EncryptedAccountReference; stableKey: StableAccountKey; total: AvailableMoney; cash: AvailableMoney; accrued: AvailableMoney; currency: string; sourceAsOf: string; }
-export interface EquityPositionObservation { providerRef: EncryptedAccountReference; stableAccountKey: StableAccountKey; instrumentId: string; symbol: string; name: string; assetClass: string; quantity: string; marketValue: AvailableMoney; costBasis: AvailableMoney; costBasisSource: 'provider_average' | 'unavailable'; currency: string; sourceAsOf: string; }
-export interface OptionPositionObservation { providerRef: EncryptedAccountReference; stableAccountKey: StableAccountKey; optionId: string; symbol: string; quantity: string; marketValue: AvailableMoney; currency: string; sourceAsOf: string; }
-export interface EquityQuoteObservation { instrumentId: string; symbol: string; price: Money | null; currency: string; marketState: 'regular' | 'extended' | 'closed' | 'unknown'; sourceAsOf: string; quality: 'complete' | 'unsupported'; }
-export interface OptionQuoteObservation { optionId: string; markPrice: string; currency: string; sourceAsOf: string; }
-export interface OptionInstrumentObservation { optionId: string; tradeValueMultiplier: string; currency: string; }
+  | 'provider_total_missing'
+  | 'cash_missing'
+  | 'accrued_missing'
+  | 'provider_market_value_missing'
+  | 'cost_basis_missing'
+  | 'unsupported_currency';
+
+export type AvailableMoney =
+  | { state: 'available'; value: Money }
+  | { state: 'unavailable'; reason: UnavailableMoneyReason };
+
+export interface AccountObservation {
+  providerRef: EncryptedAccountReference;
+  stableKey: StableAccountKey;
+  maskedAccountNumber: string | null;
+  displayName: string;
+  status: AccountStatus;
+  totalKind: AccountTotalKind;
+  sourceAsOf: string;
+}
+
+export interface AccountValueObservation {
+  providerRef: EncryptedAccountReference;
+  stableKey: StableAccountKey;
+  total: AvailableMoney;
+  cash: AvailableMoney;
+  accrued: AvailableMoney;
+  currency: string;
+  sourceAsOf: string;
+}
+
+export interface EquityPositionObservation {
+  providerRef: EncryptedAccountReference;
+  stableAccountKey: StableAccountKey;
+  instrumentId: string;
+  symbol: string;
+  name: string;
+  assetClass: string;
+  quantity: string;
+  marketValue: AvailableMoney;
+  costBasis: AvailableMoney;
+  costBasisSource: 'provider_average' | 'unavailable';
+  currency: string;
+  sourceAsOf: string;
+}
+
+export interface OptionPositionObservation {
+  providerRef: EncryptedAccountReference;
+  stableAccountKey: StableAccountKey;
+  optionId: string;
+  symbol: string;
+  quantity: string;
+  marketValue: AvailableMoney;
+  currency: string;
+  sourceAsOf: string;
+}
+
+export interface EquityQuoteObservation {
+  instrumentId: string;
+  symbol: string;
+  price: Money | null;
+  currency: string;
+  marketState: 'regular' | 'extended' | 'closed' | 'unknown';
+  sourceAsOf: string;
+  quality: 'complete' | 'unsupported';
+}
+
+export interface OptionQuoteObservation {
+  optionId: string;
+  markPrice: string;
+  currency: string;
+  sourceAsOf: string;
+}
+
+export interface OptionInstrumentObservation {
+  optionId: string;
+  tradeValueMultiplier: string;
+  currency: string;
+}
 
 export function maskAccountNumber(accountNumber: string | null | undefined) {
   if (!accountNumber) return null;
@@ -56,7 +134,7 @@ export function mapAccount(account: ProviderAccount, vault: AccountReferenceVaul
   };
 }
 export function mapPortfolio(portfolio: ProviderPortfolioResponse, providerRef: EncryptedAccountReference, stableKey: StableAccountKey, receivedAt: string): AccountValueObservation {
-  return { providerRef, stableKey, total: mapProviderMoney(portfolio.total_value, portfolio.currency, 'provider_total_missing'), cash: mapProviderMoney(portfolio.cash, portfolio.currency, 'cash_missing'), accrued: mapProviderMoney(portfolio.accrued ?? '0', portfolio.currency, 'accrued_missing'), currency: portfolio.currency, sourceAsOf: receivedAt };
+  return { providerRef, stableKey, total: mapProviderMoney(portfolio.total_value, portfolio.currency, 'provider_total_missing'), cash: mapProviderMoney(portfolio.cash, portfolio.currency, 'cash_missing'), accrued: mapProviderMoney(portfolio.accrued, portfolio.currency, 'accrued_missing'), currency: portfolio.currency, sourceAsOf: receivedAt };
 }
 export function mapEquityPosition(position: ProviderEquityPosition, providerRef: EncryptedAccountReference, stableAccountKey: StableAccountKey, receivedAt: string): EquityPositionObservation {
   if (position.currency !== 'USD') throw new ProviderBoundaryError('provider_schema_drift');
