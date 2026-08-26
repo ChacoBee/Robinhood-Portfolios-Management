@@ -8,6 +8,9 @@ case "${1:-}" in
   worker)
     exec node --import tsx apps/server/src/worker.ts
     ;;
+  web)
+    exec npm exec --workspace @aurum/web -- vinext start --hostname 0.0.0.0 --port 3000
+    ;;
   migrate)
     exec npm exec --workspace @aurum/server -- drizzle-kit migrate --config drizzle.config.ts
     ;;
@@ -15,7 +18,7 @@ case "${1:-}" in
     exec node --import tsx apps/server/src/robinhood/connect-cli.ts
     ;;
   *)
-    echo "usage: aurum {api|worker|migrate|connect-robinhood}" >&2
+    echo "usage: aurum {api|worker|web|migrate|connect-robinhood}" >&2
     exit 64
     ;;
 esac

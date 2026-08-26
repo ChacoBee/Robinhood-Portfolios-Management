@@ -35,12 +35,15 @@ const WorkerConnectedSchema = ConnectedBaseSchema.extend({ ACCOUNT_REFERENCE_ENC
   enforceProductionTls(value, context);
   if (Buffer.from(value.ACCOUNT_REFERENCE_ENCRYPTION_KEY, 'base64').equals(Buffer.from(value.ROBINHOOD_OAUTH_ENCRYPTION_KEY, 'base64'))) context.addIssue({ code: 'custom', path: ['ROBINHOOD_OAUTH_ENCRYPTION_KEY'], message: 'ROBINHOOD_OAUTH_ENCRYPTION_KEY must differ from ACCOUNT_REFERENCE_ENCRYPTION_KEY' });
 });
-const EnrollmentConnectedSchema = ConnectedBaseSchema.extend({ ROBINHOOD_OAUTH_ENCRYPTION_KEY: EncryptionKeySchema }).superRefine(enforceProductionTls);
+const EnrollmentConnectedSchema = ConnectedBaseSchema.extend({
+  ROBINHOOD_OAUTH_ENCRYPTION_KEY: EncryptionKeySchema,
+  ROBINHOOD_CALLBACK_BIND_HOST: z.enum(['127.0.0.1', '0.0.0.0']).default('127.0.0.1'),
+}).superRefine(enforceProductionTls);
 
 function values(environment: Readonly<Record<string, string | undefined>>, names: readonly string[]) { return Object.fromEntries(names.map((name) => [name, environment[name]])); }
 const apiNames = ['APP_MODE', 'NODE_ENV', 'DATABASE_URL', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL', 'WEB_ORIGIN', 'CLERK_PUBLISHABLE_KEY', 'CLERK_ISSUER_URL', 'CLERK_SECRET_KEY', 'CSRF_SECRET'] as const;
 const workerNames = ['APP_MODE', 'NODE_ENV', 'DATABASE_URL', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL', 'ACCOUNT_REFERENCE_ENCRYPTION_KEY', 'ROBINHOOD_OAUTH_ENCRYPTION_KEY'] as const;
-const enrollmentNames = ['APP_MODE', 'NODE_ENV', 'DATABASE_URL', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL', 'ROBINHOOD_OAUTH_ENCRYPTION_KEY'] as const;
+const enrollmentNames = ['APP_MODE', 'NODE_ENV', 'DATABASE_URL', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL', 'ROBINHOOD_OAUTH_ENCRYPTION_KEY', 'ROBINHOOD_CALLBACK_BIND_HOST'] as const;
 export type ApiEnvironment = z.infer<typeof DemoEnvironmentSchema> | z.infer<typeof ApiConnectedSchema>;
 export type WorkerEnvironment = z.infer<typeof DemoEnvironmentSchema> | z.infer<typeof WorkerConnectedSchema>;
 export type EnrollmentEnvironment = z.infer<typeof DemoEnvironmentSchema> | z.infer<typeof EnrollmentConnectedSchema>;

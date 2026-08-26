@@ -44,7 +44,10 @@ Docker is optional:
 docker build -t aurum-portfolio:local .
 ```
 
-The image accepts `api`, `worker`, or `migrate`. Connected Compose use also requires the fail-closed environment contract documented in [deployment](docs/operations/deployment.md).
+The image accepts `api`, `worker`, `web`, `migrate`, or the one-shot
+`connect-robinhood` operator command. Connected Compose use requires the
+fail-closed environment contract documented in [deployment](docs/operations/deployment.md)
+and the private [enrollment runbook](docs/operations/robinhood-enrollment.md).
 
 ## Data modes
 

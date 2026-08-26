@@ -4,11 +4,11 @@ services:
   postgres:
     image: postgres:17-alpine
     environment:
-      POSTGRES_DB: aurum
-      POSTGRES_USER: aurum
-      POSTGRES_PASSWORD: local-development-only
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in the operator environment}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in the operator environment}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in the operator environment}
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U aurum -d aurum"]
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
       interval: 5s
       timeout: 3s
       retries: 12
@@ -18,7 +18,9 @@ services:
   migrate:
     build: .
     command: migrate
-    env_file: .env
+    environment:
+      NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the operator environment}
     depends_on:
       postgres:
         condition: service_healthy
@@ -27,11 +29,26 @@ services:
   api:
     build: .
     command: api
-    env_file: .env
     environment:
+      APP_MODE: ${APP_MODE:?Set APP_MODE in the operator environment}
+      NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the operator environment}
+      OWNER_CLERK_USER_ID: ${OWNER_CLERK_USER_ID:?Set OWNER_CLERK_USER_ID in the operator environment}
+      OWNER_EMAIL: ${OWNER_EMAIL:?Set OWNER_EMAIL in the operator environment}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in the operator environment}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:?Set CLERK_PUBLISHABLE_KEY in the operator environment}
+      CLERK_ISSUER_URL: ${CLERK_ISSUER_URL:?Set CLERK_ISSUER_URL in the operator environment}
+      CLERK_SECRET_KEY: ${CLERK_SECRET_KEY:?Set CLERK_SECRET_KEY in the operator environment}
+      CSRF_SECRET: ${CSRF_SECRET:?Set CSRF_SECRET in the operator environment}
+      AURUM_TRUSTED_COMPOSITION_MODULE: /app/apps/server/src/runtime/trusted-composition.ts
       API_HOST: 0.0.0.0
     ports:
-      - "8787:8787"
+      - "127.0.0.1:8787:8787"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/ready').then((response) => process.exit(response.ok ? 0 : 1)).catch(() => process.exit(1))"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -43,7 +60,15 @@ services:
   worker:
     build: .
     command: worker
-    env_file: .env
+    environment:
+      APP_MODE: ${APP_MODE:?Set APP_MODE in the operator environment}
+      NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the operator environment}
+      OWNER_CLERK_USER_ID: ${OWNER_CLERK_USER_ID:?Set OWNER_CLERK_USER_ID in the operator environment}
+      OWNER_EMAIL: ${OWNER_EMAIL:?Set OWNER_EMAIL in the operator environment}
+      ACCOUNT_REFERENCE_ENCRYPTION_KEY: ${ACCOUNT_REFERENCE_ENCRYPTION_KEY:?Set ACCOUNT_REFERENCE_ENCRYPTION_KEY in the operator environment}
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: ${ROBINHOOD_OAUTH_ENCRYPTION_KEY:?Set ROBINHOOD_OAUTH_ENCRYPTION_KEY in the operator environment}
+      AURUM_TRUSTED_COMPOSITION_MODULE: /app/apps/server/src/runtime/trusted-composition.ts
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -51,6 +76,47 @@ services:
     tmpfs:
       - /tmp
     restart: unless-stopped
+
+  web:
+    build: .
+    command: web
+    environment:
+      NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
+      AURUM_DATA_MODE: ${AURUM_DATA_MODE:?Set AURUM_DATA_MODE in the operator environment}
+      WEB_ORIGIN: ${WEB_ORIGIN:?Set WEB_ORIGIN in the operator environment}
+      CLERK_PUBLISHABLE_KEY: ${CLERK_PUBLISHABLE_KEY:?Set CLERK_PUBLISHABLE_KEY in the operator environment}
+      AURUM_API_URL: http://api:8787
+    ports:
+      - "127.0.0.1:3000:3000"
+    depends_on:
+      api:
+        condition: service_healthy
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: unless-stopped
+
+  connect-robinhood:
+    build: .
+    command: connect-robinhood
+    profiles: [ops]
+    environment:
+      APP_MODE: ${APP_MODE:?Set APP_MODE in the operator environment}
+      NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the operator environment}
+      OWNER_CLERK_USER_ID: ${OWNER_CLERK_USER_ID:?Set OWNER_CLERK_USER_ID in the operator environment}
+      OWNER_EMAIL: ${OWNER_EMAIL:?Set OWNER_EMAIL in the operator environment}
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: ${ROBINHOOD_OAUTH_ENCRYPTION_KEY:?Set ROBINHOOD_OAUTH_ENCRYPTION_KEY in the operator environment}
+      ROBINHOOD_CALLBACK_BIND_HOST: 0.0.0.0
+    ports:
+      - "127.0.0.1:43117:43117"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: "no"
 
 volumes:
   aurum-postgres:

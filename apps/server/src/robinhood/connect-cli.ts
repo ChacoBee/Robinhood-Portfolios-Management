@@ -242,7 +242,7 @@ export async function connectRobinhood(options: ConnectRobinhoodOptions): Promis
     });
     const guardedFetch = provider.fetch;
     callback = await createCallbackServer({
-      host: options.callbackHost ?? '127.0.0.1',
+      host: options.callbackHost ?? config.ROBINHOOD_CALLBACK_BIND_HOST,
       port: options.callbackPort ?? callbackPort,
       validate: (params) => validateOAuthCallback(provider, params),
       timeoutMs: options.callbackTimeoutMs ?? defaultCallbackTimeoutMs,

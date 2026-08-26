@@ -204,4 +204,16 @@ describe('environment guards', () => {
     expect(enrollment).not.toHaveProperty('ACCOUNT_REFERENCE_ENCRYPTION_KEY');
     expect(parseMigrationDatabaseUrl('postgresql://localhost/aurum', 'test')).toBe('postgresql://localhost/aurum');
   });
+
+  it('limits enrollment callback listening to loopback by default or the Docker bridge bind host', () => {
+    const base = {
+      APP_MODE: 'connected' as const, NODE_ENV: 'development', DATABASE_URL: 'postgresql://localhost/aurum',
+      OWNER_CLERK_USER_ID: 'user_owner123', OWNER_EMAIL: 'owner@example.test',
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: oauthEncryptionKey,
+    };
+
+    expect(parseEnrollmentEnvironment(base)).toMatchObject({ ROBINHOOD_CALLBACK_BIND_HOST: '127.0.0.1' });
+    expect(parseEnrollmentEnvironment({ ...base, ROBINHOOD_CALLBACK_BIND_HOST: '0.0.0.0' })).toMatchObject({ ROBINHOOD_CALLBACK_BIND_HOST: '0.0.0.0' });
+    expect(() => parseEnrollmentEnvironment({ ...base, ROBINHOOD_CALLBACK_BIND_HOST: '192.0.2.1' })).toThrow(/ROBINHOOD_CALLBACK_BIND_HOST/);
+  });
 });

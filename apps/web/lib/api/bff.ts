@@ -24,11 +24,12 @@ function routeAllowed(method: string, path: string): boolean {
   return method === 'POST' || method === 'DELETE';
 }
 
-function safeApiBase(value: string): string | null {
+function safeApiBase(value: string, nodeEnvironment: string | undefined): string | null {
   try {
     const url = new URL(value);
     const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
-    if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:')) {
+    const composeApi = value === 'http://api:8787' && nodeEnvironment !== 'production';
+    if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:') && !composeApi) {
       return null;
     }
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
@@ -58,13 +59,14 @@ export async function forwardAurumRequest(
   path: string,
   apiBaseUrl: string,
   fetcher: Fetcher = fetch,
+  nodeEnvironment: string | undefined = process.env.NODE_ENV,
 ): Promise<Response> {
   const method = request.method.toUpperCase();
   if (!routeAllowed(method, path)) return errorResponse(404, 'not_found');
   if (writeMethods.has(method) && !request.headers.get('x-csrf-token')) {
     return errorResponse(403, 'csrf_required');
   }
-  const api = safeApiBase(apiBaseUrl);
+  const api = safeApiBase(apiBaseUrl, nodeEnvironment);
   if (!api) return errorResponse(503, 'api_unavailable');
 
   const contentLength = Number(request.headers.get('content-length') ?? 0);

@@ -23,6 +23,6 @@ COPY --chown=node:node docker-entrypoint.sh /usr/local/bin/aurum
 RUN chmod 0555 /usr/local/bin/aurum
 
 USER node
-EXPOSE 8787
+EXPOSE 3000 8787
 ENTRYPOINT ["/usr/local/bin/aurum"]
 CMD ["api"]

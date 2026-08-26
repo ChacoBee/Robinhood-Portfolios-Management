@@ -2,6 +2,34 @@ import { describe, expect, it, vi } from 'vitest';
 import { forwardAurumRequest } from '../../lib/api/bff';
 
 describe('connected BFF allowlist', () => {
+  it('allows the internal Compose API origin only outside production', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(Response.json({ data: {} }));
+    const request = new Request('http://localhost:3000/api/aurum/v1/settings');
+
+    const development = await forwardAurumRequest(
+      request,
+      '/v1/settings',
+      'http://api:8787',
+      fetcher,
+      'development',
+    );
+    const production = await forwardAurumRequest(
+      request,
+      '/v1/settings',
+      'http://api:8787',
+      fetcher,
+      'production',
+    );
+
+    expect(development.status).toBe(200);
+    expect(fetcher).toHaveBeenCalledWith(
+      'http://api:8787/v1/settings',
+      expect.objectContaining({ redirect: 'error' }),
+    );
+    expect(production.status).toBe(503);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it('forwards only owner credentials and CSRF to an allowed mutation', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ data: { state: 'queued' } }), {
