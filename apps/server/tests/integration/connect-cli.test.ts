@@ -99,7 +99,14 @@ function dependencies(overrides: Partial<Parameters<NonNullable<ReturnType<typeo
   };
   const providerFetch = vi.fn<typeof fetch>();
   const database = { close: vi.fn(async () => undefined) };
-  const connectedStore = { markConnected: vi.fn(async () => undefined) };
+  let durableConnectionState: 'connected' | 'disconnected' = 'connected';
+  const connectedStore = {
+    markConnected: vi.fn(async () => undefined),
+    disconnect: vi.fn(async () => {
+      durableConnectionState = 'disconnected';
+    }),
+    connectionState: () => durableConnectionState,
+  };
   const createClientTransport = vi
     .fn()
     .mockReturnValueOnce({ client: firstClient, transport: firstTransport })
@@ -195,7 +202,20 @@ describe('Robinhood enrollment command', () => {
     );
   });
 
-  it('fails closed and does not mark a token-only grant connected when tool verification drifts', async () => {
+  it('allows extra provider tools after verifying the required read subset', async () => {
+    const { connectRobinhood } = cliUnderTest();
+    expect(connectRobinhood).toBeTypeOf('function');
+    if (!connectRobinhood) return;
+    const deps = dependencies();
+    deps.fixtures.secondClient.listTools = vi.fn(async () => ({
+      tools: [...allowedRobinhoodTools.map((name) => ({ name })), { name: 'place_order' }],
+    }));
+
+    await expect(connectRobinhood(deps)).resolves.toBeUndefined();
+    expect(deps.fixtures.connectedStore.markConnected).toHaveBeenCalledOnce();
+  });
+
+  it('disconnects a previously connected grant when tool verification drifts', async () => {
     const { connectRobinhood } = cliUnderTest();
     expect(connectRobinhood).toBeTypeOf('function');
     if (!connectRobinhood) return;
@@ -204,6 +224,8 @@ describe('Robinhood enrollment command', () => {
 
     await expect(connectRobinhood(deps)).rejects.toThrow('provider_authorization_invalid');
     expect(deps.fixtures.connectedStore.markConnected).not.toHaveBeenCalled();
+    expect(deps.fixtures.connectedStore.disconnect).toHaveBeenCalledOnce();
+    expect(deps.fixtures.connectedStore.connectionState()).toBe('disconnected');
     expect(deps.fixtures.secondClient.close).toHaveBeenCalledOnce();
     expect(deps.fixtures.secondTransport.close).toHaveBeenCalledOnce();
   });
@@ -248,5 +270,24 @@ describe('Robinhood enrollment command', () => {
       validateOAuthCallback(provider, new URLSearchParams({ state: 'state', iss: issuer })),
     ).toBe(true);
     expect(provider.consumeState).toHaveBeenCalledWith('state');
+  });
+
+  it('closes a real unawaited callback lifecycle without an unhandled rejection', async () => {
+    const { startOAuthCallbackServer } = cliUnderTest();
+    expect(startOAuthCallbackServer).toBeTypeOf('function');
+    if (!startOAuthCallbackServer) return;
+    const unhandled = vi.fn();
+    process.once('unhandledRejection', unhandled);
+    const server = await startOAuthCallbackServer({
+      host: '127.0.0.1',
+      port: 0,
+      validate: () => false,
+      timeoutMs: 1_000,
+    });
+
+    await server.close();
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(unhandled).not.toHaveBeenCalled();
   });
 });

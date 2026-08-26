@@ -58,6 +58,7 @@ export async function startOAuthCallbackServer(
     resolveCallback = resolve;
     rejectCallback = reject;
   });
+  void callback.catch(() => undefined);
   const server = createServer((request, response) => {
     const url = new URL(request.url ?? '/', 'http://127.0.0.1');
     if (url.pathname !== callbackPath) {
@@ -150,12 +151,9 @@ function createSdkClientTransport(input: {
   return { client, transport };
 }
 
-function exactReadTools(tools: readonly { name: string }[]): boolean {
-  return (
-    tools.length === allowedRobinhoodTools.length &&
-    new Set(tools.map((tool) => tool.name)).size === allowedRobinhoodTools.length &&
-    allowedRobinhoodTools.every((name) => tools.some((tool) => tool.name === name))
-  );
+function hasRequiredReadTools(tools: readonly { name: string }[]): boolean {
+  const advertised = new Set(tools.map((tool) => tool.name));
+  return allowedRobinhoodTools.every((name) => advertised.has(name));
 }
 
 async function safelyClose(value: { close(): Promise<void> } | undefined): Promise<void> {
@@ -221,6 +219,8 @@ export async function connectRobinhood(options: ConnectRobinhoodOptions): Promis
   let callback: OAuthCallbackServer | undefined;
   let first: EnrollmentClientTransport | undefined;
   let second: EnrollmentClientTransport | undefined;
+  let store: RobinhoodOAuthStore | undefined;
+  let verifyingTools = false;
 
   try {
     const config = parseEnvironment(options.environment);
@@ -231,7 +231,7 @@ export async function connectRobinhood(options: ConnectRobinhoodOptions): Promis
       clerkUserId: config.OWNER_CLERK_USER_ID,
       email: config.OWNER_EMAIL,
     });
-    const store = createStore(
+    store = createStore(
       repositories.oauthCredentials,
       ownerId,
       config.ROBINHOOD_OAUTH_ENCRYPTION_KEY,
@@ -265,11 +265,19 @@ export async function connectRobinhood(options: ConnectRobinhoodOptions): Promis
       provider,
       fetch: guardedFetch,
     });
+    verifyingTools = true;
     await second.client.connect(second.transport);
-    if (!exactReadTools((await second.client.listTools()).tools)) throw safeCallbackFailure();
+    if (!hasRequiredReadTools((await second.client.listTools()).tools)) throw safeCallbackFailure();
     await store.markConnected();
     logger.info('Robinhood enrollment verified');
   } catch (error) {
+    if (verifyingTools) {
+      try {
+        await store?.disconnect();
+      } catch {
+        // The original enrollment failure remains the only surfaced error.
+      }
+    }
     logger.error('Robinhood enrollment failed');
     if (error instanceof RobinhoodOAuthProviderError) throw error;
     throw safeCallbackFailure();

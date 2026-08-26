@@ -1,3 +1,4 @@
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/client';
 import { describe, expect, it, vi } from 'vitest';
 import type { RobinhoodOAuthGrant } from '../../src/robinhood/oauth-store';
 import * as oauthProviderModule from '../../src/robinhood/oauth-provider';
@@ -10,6 +11,24 @@ const metadata = {
   token_endpoint: 'https://api.robinhood.com/oauth2/token/',
   code_challenge_methods_supported: ['S256'],
 };
+
+const callbackUrl = 'http://127.0.0.1:43117/callback';
+
+function authorizationUrl(params: Record<string, string> = {}) {
+  const url = new URL('https://robinhood.com/oauth');
+  for (const [name, value] of Object.entries({
+    state: 'opaque-state',
+    scope: 'internal',
+    resource: issuer,
+    redirect_uri: callbackUrl,
+    code_challenge: 'pkce',
+    code_challenge_method: 'S256',
+    ...params,
+  })) {
+    url.searchParams.set(name, value);
+  }
+  return url;
+}
 
 interface TestStore {
   load(): Promise<RobinhoodOAuthGrant | null>;
@@ -90,6 +109,7 @@ describe('Robinhood OAuth provider', () => {
     provider.saveCodeVerifier('pkce-verifier');
 
     expect(state).toBe('cryptographically-random-state');
+    expect(provider.consumeState('wrong-state')).toBe(false);
     expect(provider.consumeState(state)).toBe(true);
     expect(provider.consumeState(state)).toBe(false);
     expect(provider.codeVerifier()).toBe('pkce-verifier');
@@ -101,12 +121,20 @@ describe('Robinhood OAuth provider', () => {
     if (!RobinhoodOAuthProvider) return;
 
     const provider = new RobinhoodOAuthProvider({ store: store() });
-    provider.redirectToAuthorization(
-      new URL('https://robinhood.com/oauth?state=opaque-state&code_challenge=pkce'),
-    );
+    provider.redirectToAuthorization(authorizationUrl());
 
-    expect(provider.authorizationUrl()).toBe(
-      'https://robinhood.com/oauth?state=opaque-state&code_challenge=pkce',
+    expect(provider.authorizationUrl()).toBe(authorizationUrl().toString());
+    expect(() => provider.redirectToAuthorization(authorizationUrl({ scope: 'internal trade' }))).toThrow(
+      'provider_authorization_invalid',
+    );
+    expect(() => provider.redirectToAuthorization(authorizationUrl({ resource: 'https://evil.example' }))).toThrow(
+      'provider_authorization_invalid',
+    );
+    expect(() => provider.redirectToAuthorization(authorizationUrl({ redirect_uri: 'http://localhost/callback' }))).toThrow(
+      'provider_authorization_invalid',
+    );
+    expect(() => provider.redirectToAuthorization(authorizationUrl({ code_challenge_method: 'plain' }))).toThrow(
+      'provider_authorization_invalid',
     );
   });
 
@@ -158,6 +186,9 @@ describe('Robinhood OAuth provider', () => {
     await expect(
       provider.saveTokens({ access_token: 'leak' }, { issuer: 'https://unexpected.example' }),
     ).rejects.toThrow('provider_authorization_invalid');
+    await expect(
+      provider.saveTokens({ access_token: 'leak', scope: 'internal trade' }, { issuer }),
+    ).rejects.toThrow('provider_authorization_invalid');
   });
 
   it('pins resource and discovery metadata including every endpoint and S256', async () => {
@@ -190,6 +221,78 @@ describe('Robinhood OAuth provider', () => {
         authorizationServerMetadata: { ...metadata, token_endpoint: 'https://evil.example/token' },
       }),
     ).toThrow('provider_authorization_invalid');
+    expect(() =>
+      provider.saveDiscoveryState({
+        authorizationServerUrl: issuer,
+        resourceMetadata: {
+          resource: issuer,
+          authorization_servers: [issuer],
+          scopes_supported: ['internal', 'trade'],
+        },
+        authorizationServerMetadata: metadata,
+      }),
+    ).toThrow('provider_authorization_invalid');
+  });
+
+  it('rejects a broadened challenge scope through the real SDK transport and auth flow', async () => {
+    const RobinhoodOAuthProvider = providerUnderTest();
+    expect(RobinhoodOAuthProvider).toBeTypeOf('function');
+    if (!RobinhoodOAuthProvider) return;
+    const innerFetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === issuer) {
+        return new Response('', {
+          status: 401,
+          headers: { 'www-authenticate': 'Bearer scope="internal trade"' },
+        });
+      }
+      if (url.includes('/.well-known/oauth-protected-resource/')) {
+        return Response.json({
+          resource: issuer,
+          authorization_servers: [issuer],
+          scopes_supported: ['internal'],
+        });
+      }
+      if (url.includes('/.well-known/oauth-authorization-server/')) {
+        return Response.json({
+          ...metadata,
+          response_types_supported: ['code'],
+          token_endpoint_auth_methods_supported: ['none'],
+          scopes_supported: ['internal'],
+        });
+      }
+      if (url === 'https://agent.robinhood.com/oauth/trading/register') {
+        return Response.json({
+          client_id: 'registered-client',
+          redirect_uris: [callbackUrl],
+          token_endpoint_auth_method: 'none',
+          grant_types: ['authorization_code', 'refresh_token'],
+          response_types: ['code'],
+          application_type: 'native',
+          client_name: 'Aurum Portfolio',
+          scope: 'internal',
+        });
+      }
+      throw new Error('unexpected_mock_url');
+    });
+    const provider = new RobinhoodOAuthProvider({
+      store: store(),
+      randomState: () => 'state',
+      fetch: innerFetch,
+    });
+    const transport = new StreamableHTTPClientTransport(new URL(issuer), {
+      authProvider: provider as never,
+      fetch: provider.fetch,
+    });
+    await transport.start();
+
+    await expect(
+      transport.send({ jsonrpc: '2.0', id: 1, method: 'ping', params: {} } as never),
+    ).rejects.toThrow('provider_authorization_invalid');
+    expect(innerFetch.mock.calls.map(([input]) => String(input))).not.toContain(
+      'https://agent.robinhood.com/oauth/trading/register',
+    );
+    await transport.close();
   });
 
   it('fails closed on redirects and unapproved fetch origins', async () => {

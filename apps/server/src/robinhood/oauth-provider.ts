@@ -73,7 +73,30 @@ function pinnedAuthorizationUrl(value: URL): URL {
   ) {
     return invalidAuthorization();
   }
+  for (const [name, expectedValue] of [
+    ['scope', 'internal'],
+    ['resource', robinhoodMcpEndpoint],
+    ['redirect_uri', robinhoodClientMetadata.redirect_uris[0]],
+    ['code_challenge_method', 'S256'],
+  ] as const) {
+    if (value.searchParams.getAll(name).length !== 1 || value.searchParams.get(name) !== expectedValue) {
+      return invalidAuthorization();
+    }
+  }
   return value;
+}
+
+function exactScopeList(value: unknown): void {
+  if (
+    value !== undefined &&
+    (!Array.isArray(value) || value.length !== 1 || value[0] !== robinhoodClientMetadata.scope)
+  ) {
+    invalidAuthorization();
+  }
+}
+
+function exactScope(value: unknown): void {
+  if (value !== undefined && value !== robinhoodClientMetadata.scope) invalidAuthorization();
 }
 
 function hasExactIssuer(context: OAuthClientInformationContext | undefined): boolean {
@@ -97,7 +120,20 @@ function credentialForIssuer<T extends Record<string, unknown>>(
   if (credential.issuer !== undefined && credential.issuer !== robinhoodMcpEndpoint) {
     return invalidAuthorization();
   }
+  exactScope(credential.scope);
   return credential as T;
+}
+
+function validateRegistrationRequest(url: URL, init: RequestInit | undefined): void {
+  if (url.href !== robinhoodRegistrationEndpoint) return;
+  if (typeof init?.body !== 'string') invalidAuthorization();
+  let metadata: unknown;
+  try {
+    metadata = JSON.parse(init.body);
+  } catch {
+    invalidAuthorization();
+  }
+  exactScope(record(metadata).scope);
 }
 
 function validateDiscoveryState(state: OAuthDiscoveryState): OAuthDiscoveryState {
@@ -116,6 +152,7 @@ function validateDiscoveryState(state: OAuthDiscoveryState): OAuthDiscoveryState
     ) {
       invalidAuthorization();
     }
+    exactScopeList(resource.scopes_supported);
   }
   const metadata = state.authorizationServerMetadata;
   if (metadata === undefined) invalidAuthorization();
@@ -130,6 +167,7 @@ function validateDiscoveryState(state: OAuthDiscoveryState): OAuthDiscoveryState
   ) {
     invalidAuthorization();
   }
+  exactScopeList(value.scopes_supported);
   return state;
 }
 
@@ -162,6 +200,7 @@ export class RobinhoodOAuthProvider implements OAuthClientProvider {
         return invalidAuthorization();
       }
       if (!approvedOrigins.has(url.origin)) return invalidAuthorization();
+      validateRegistrationRequest(url, init);
       const response = await innerFetch(input, { ...init, redirect: 'manual' });
       if (response.status >= 300 && response.status < 400) return invalidAuthorization();
       return response;
@@ -234,8 +273,9 @@ export class RobinhoodOAuthProvider implements OAuthClientProvider {
 
   consumeState(candidate: string): boolean {
     const expected = this.stateValue;
+    if (expected === undefined || candidate !== expected) return false;
     this.stateValue = undefined;
-    return expected !== undefined && candidate === expected;
+    return true;
   }
 
   saveDiscoveryState(state: OAuthDiscoveryState): void {
