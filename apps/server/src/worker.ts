@@ -4,9 +4,9 @@ import { parseEnvironment } from './config';
 import { createPostgresClient } from './db/client';
 import { createRepositories } from './db/repositories';
 import { RobinhoodReadClient } from './robinhood/client';
-import { HttpMcpTransport } from './robinhood/transport';
+import { SdkMcpTransport } from './robinhood/transport';
 import { AesGcmAccountReferenceVault } from './robinhood/vault';
-import type { VerifiedRobinhoodAuthorizationProvider } from './robinhood/authorization';
+import type { AuthProvider } from '@modelcontextprotocol/client';
 import { RefreshService } from './sync/refresh-service';
 import { resolveUsEquitySession } from './sync/market-calendar';
 import { runRefreshWorkerLoop } from './sync/worker-loop';
@@ -20,10 +20,7 @@ import {
 export interface TrustedRobinhoodWorkerComposition {
   endpoint: string;
   approvedEndpointOrigins: readonly string[];
-  expectedIssuer: string;
-  expectedAudience: string;
-  authorizationProvider: VerifiedRobinhoodAuthorizationProvider;
-  fetchImplementation?: typeof fetch;
+  authProvider: AuthProvider;
   afterSnapshotPromoted: (input: {
     userId: string;
     snapshotId: string;
@@ -60,15 +57,10 @@ export async function startWorker(
   const vault = new AesGcmAccountReferenceVault(
     config.ACCOUNT_REFERENCE_ENCRYPTION_KEY,
   );
-  const transport = new HttpMcpTransport({
+  const transport = new SdkMcpTransport({
     endpoint: resolvedComposition.endpoint,
     approvedEndpointOrigins: resolvedComposition.approvedEndpointOrigins,
-    expectedIssuer: resolvedComposition.expectedIssuer,
-    expectedAudience: resolvedComposition.expectedAudience,
-    authorizationProvider: resolvedComposition.authorizationProvider,
-    ...(resolvedComposition.fetchImplementation
-      ? { fetchImplementation: resolvedComposition.fetchImplementation }
-      : {}),
+    authProvider: resolvedComposition.authProvider,
   });
   const database = createPostgresClient(config.DATABASE_URL);
   const repositories = createRepositories(database, {
@@ -120,7 +112,11 @@ export async function startWorker(
   } finally {
     process.off('SIGINT', stop);
     process.off('SIGTERM', stop);
-    await database.close();
+    try {
+      await transport.close();
+    } finally {
+      await database.close();
+    }
   }
 }
 

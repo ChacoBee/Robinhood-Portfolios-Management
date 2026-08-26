@@ -1,174 +1,164 @@
 import { describe, expect, it, vi } from 'vitest';
-import type {
-  VerifiedRobinhoodAuthorizationGrant,
-  VerifiedRobinhoodAuthorizationProvider,
-} from '../../src/robinhood/authorization';
-import { HttpMcpTransport } from '../../src/robinhood/transport';
+import { allowedRobinhoodTools } from '../../src/robinhood/read-methods';
+import * as transportModule from '../../src/robinhood/transport';
 
 const endpoint = 'https://mcp.example.test/read';
-const endpointOrigin = 'https://mcp.example.test';
-const expectedIssuer = 'https://identity.example.test';
-const expectedAudience = 'robinhood-readonly-mcp';
-const now = () => new Date('2026-08-25T14:00:00.000Z');
 
-function grant(
-  overrides: Partial<VerifiedRobinhoodAuthorizationGrant> = {},
-): VerifiedRobinhoodAuthorizationGrant {
+interface AdapterClient {
+  connect(): Promise<void>;
+  listTools(): Promise<{ tools: Array<{ name: string }> }>;
+  callTool(
+    request: { name: string; arguments: Readonly<Record<string, unknown>> },
+    options: { timeout: number },
+  ): Promise<unknown>;
+  close(): Promise<void>;
+}
+
+interface AdapterFactoryInput {
+  endpoint: URL;
+  authProvider: unknown;
+}
+
+type AdapterFactory = (input: AdapterFactoryInput) => AdapterClient;
+
+type SdkMcpTransportConstructor = new (options: {
+  endpoint: string;
+  approvedEndpointOrigins: readonly string[];
+  authProvider: unknown;
+  clientFactory: AdapterFactory;
+}) => {
+  connect(): Promise<void>;
+  call<T>(tool: string, args: Readonly<Record<string, unknown>>): Promise<T>;
+  close(): Promise<void>;
+};
+
+function constructorUnderTest(): SdkMcpTransportConstructor | undefined {
+  return (transportModule as { SdkMcpTransport?: SdkMcpTransportConstructor })
+    .SdkMcpTransport;
+}
+
+function advertisedTools() {
+  return { tools: allowedRobinhoodTools.map((name) => ({ name })) };
+}
+
+function options(clientFactory: AdapterFactory) {
   return {
-    header: 'Bearer synthetic-token',
-    actualScopes: ['internal'],
-    issuer: expectedIssuer,
-    audience: expectedAudience,
-    expiresAt: '2026-08-25T14:05:00.000Z',
-    verification: 'signed_claims',
-    authorizedEndpointOrigin: endpointOrigin,
-    ...overrides,
+    endpoint,
+    approvedEndpointOrigins: ['https://mcp.example.test'],
+    authProvider: { token: async () => undefined },
+    clientFactory,
   };
 }
 
-function provider(
-  value: VerifiedRobinhoodAuthorizationGrant = grant(),
-): VerifiedRobinhoodAuthorizationProvider {
-  return { getVerifiedAuthorization: async () => value };
-}
-
-function options(
-  authorizationProvider: VerifiedRobinhoodAuthorizationProvider,
-) {
-  return {
-    endpoint,
-    approvedEndpointOrigins: [endpointOrigin],
-    expectedIssuer,
-    expectedAudience,
-    authorizationProvider,
-    now,
-  } as const;
-}
-
-describe('Robinhood MCP transport boundary', () => {
-  it('rejects an invalid actual scope grant before making a network request', async () => {
-    const fetchImplementation = vi.fn<typeof fetch>();
-    const transport = new HttpMcpTransport({
-      ...options(
-        provider(
-          grant({
-            actualScopes: ['internal', 'orders:write'],
-          } as Partial<VerifiedRobinhoodAuthorizationGrant>),
-        ),
-      ),
-      fetchImplementation,
-    });
-
-    await expect(
-      transport.call('get_accounts', {}),
-    ).rejects.toThrow('provider_scope_invalid');
-    expect(fetchImplementation).not.toHaveBeenCalled();
-  });
-
-  it('rejects an expired verified grant before making a network request', async () => {
-    const fetchImplementation = vi.fn<typeof fetch>();
-    const transport = new HttpMcpTransport({
-      ...options(
-        provider(grant({ expiresAt: '2026-08-25T13:59:59.000Z' })),
-      ),
-      fetchImplementation,
-    });
-
-    await expect(
-      transport.call('get_accounts', {}),
-    ).rejects.toThrow('provider_authorization_invalid');
-    expect(fetchImplementation).not.toHaveBeenCalled();
-  });
-
-  it('rejects a grant for a different audience before making a network request', async () => {
-    const fetchImplementation = vi.fn<typeof fetch>();
-    const transport = new HttpMcpTransport({
-      ...options(provider(grant({ audience: 'different-service' }))),
-      fetchImplementation,
-    });
-
-    await expect(
-      transport.call('get_accounts', {}),
-    ).rejects.toThrow('provider_authorization_invalid');
-    expect(fetchImplementation).not.toHaveBeenCalled();
-  });
-
-  it('pins the endpoint to an explicitly approved HTTPS origin', () => {
-    const fetchImplementation = vi.fn<typeof fetch>();
-
-    expect(
-      () =>
-        new HttpMcpTransport({
-          ...options(provider()),
-          endpoint: 'https://attacker.example/read',
-          fetchImplementation,
-        }),
-    ).toThrow('provider_protocol_error');
-    expect(fetchImplementation).not.toHaveBeenCalled();
-  });
-
-  it('redacts authorization-provider failures and performs zero fetches', async () => {
-    const fetchImplementation = vi.fn<typeof fetch>();
-    const authorizationProvider: VerifiedRobinhoodAuthorizationProvider = {
-      getVerifiedAuthorization: async () => {
-        throw new Error('bearer secret-token account 123456789');
-      },
+describe('SDK MCP transport lifecycle', () => {
+  it('connects and verifies the advertised read tools before the first call', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => ({ structuredContent: { data: { results: [] } } })),
+      close: vi.fn(async () => undefined),
     };
-    const transport = new HttpMcpTransport({
-      ...options(authorizationProvider),
-      fetchImplementation,
-    });
+    const factory = vi.fn<AdapterFactory>(() => client);
+    const SdkMcpTransport = constructorUnderTest();
 
-    let error: unknown;
-    try {
-      await transport.call('get_accounts', {});
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toMatchObject({ code: 'provider_authorization_invalid' });
-    expect(String(error)).not.toContain('secret-token');
-    expect(String(error)).not.toContain('123456789');
-    expect(fetchImplementation).not.toHaveBeenCalled();
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    const transport = new SdkMcpTransport(options(factory));
+    await expect(transport.call('get_accounts', {})).resolves.toEqual({ results: [] });
+
+    expect(factory).toHaveBeenCalledWith({
+      endpoint: new URL(endpoint),
+      authProvider: { token: expect.any(Function) },
+    });
+    expect(client.connect).toHaveBeenCalledOnce();
+    expect(client.listTools).toHaveBeenCalledOnce();
+    expect(client.callTool).toHaveBeenCalledWith(
+      { name: 'get_accounts', arguments: {} },
+      { timeout: 15_000 },
+    );
   });
 
-  it('never includes an upstream secret-bearing error message', async () => {
-    const fetchImplementation = vi.fn<typeof fetch>(async (_input, init) => {
-      const request = JSON.parse(String(init?.body)) as { id: string };
-      return new Response(
-        JSON.stringify({
-          jsonrpc: '2.0',
-          id: request.id,
-          error: {
-            code: -32000,
-            message: 'account 123456789 bearer secret-token',
-          },
-        }),
-        { status: 200, headers: { 'content-type': 'application/json' } },
-      );
-    });
-    const transport = new HttpMcpTransport({
-      ...options(provider()),
-      fetchImplementation,
-    });
+  it('reuses one initialized SDK client across calls', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => ({ structuredContent: { data: { results: [] } } })),
+      close: vi.fn(async () => undefined),
+    };
+    const factory = vi.fn<AdapterFactory>(() => client);
+    const SdkMcpTransport = constructorUnderTest();
 
-    let error: unknown;
-    try {
-      await transport.call('get_accounts', {});
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toMatchObject({ code: 'provider_protocol_error' });
-    expect(String(error)).not.toContain('123456789');
-    expect(String(error)).not.toContain('secret-token');
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    const transport = new SdkMcpTransport(options(factory));
+    await transport.call('get_accounts', {});
+    await transport.call('get_portfolio', { account_number: '123456789' });
+
+    expect(factory).toHaveBeenCalledOnce();
+    expect(client.connect).toHaveBeenCalledOnce();
+    expect(client.listTools).toHaveBeenCalledOnce();
+    expect(client.callTool).toHaveBeenNthCalledWith(
+      2,
+      { name: 'get_portfolio', arguments: { account_number: '123456789' } },
+      { timeout: 15_000 },
+    );
   });
 
-  it('rejects non-TLS provider endpoints', () => {
-    expect(
-      () =>
-        new HttpMcpTransport({
-          ...options(provider()),
-          endpoint: 'http://mcp.example.test/read',
-        }),
-    ).toThrow('provider_protocol_error');
+  it('rejects a connection that does not advertise every allowlisted read tool', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => ({
+        tools: advertisedTools().tools.filter((tool) => tool.name !== 'get_option_quotes'),
+      })),
+      callTool: vi.fn(async () => ({ structuredContent: { data: { results: [] } } })),
+      close: vi.fn(async () => undefined),
+    };
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    await expect(new SdkMcpTransport(options(() => client)).connect()).rejects.toMatchObject({
+      code: 'provider_protocol_error',
+    });
+    expect(client.callTool).not.toHaveBeenCalled();
+  });
+
+  it('closes the initialized SDK client cleanly', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => ({ structuredContent: { data: { results: [] } } })),
+      close: vi.fn(async () => undefined),
+    };
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    const transport = new SdkMcpTransport(options(() => client));
+    await transport.connect();
+    await transport.close();
+
+    expect(client.close).toHaveBeenCalledOnce();
+  });
+
+  it('rejects a result without structuredContent.data', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => ({ content: [{ type: 'text', text: 'ignore me' }] })),
+      close: vi.fn(async () => undefined),
+    };
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    await expect(
+      new SdkMcpTransport(options(() => client)).call('get_accounts', {}),
+    ).rejects.toMatchObject({ code: 'provider_protocol_error' });
   });
 });

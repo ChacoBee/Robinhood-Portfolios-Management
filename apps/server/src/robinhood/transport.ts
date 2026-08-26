@@ -1,15 +1,18 @@
-import { randomUUID } from 'node:crypto';
 import {
+  Client,
+  StreamableHTTPClientTransport,
+  type AuthProvider,
+  type CallToolResult,
+  type OAuthClientProvider,
+} from '@modelcontextprotocol/client';
+import {
+  allowedRobinhoodTools,
   assertAllowedRobinhoodTool,
-  parseExactRobinhoodReadScopes,
-  requiredRobinhoodReadScopes,
   type AllowedRobinhoodTool,
 } from './read-methods';
 import { ProviderBoundaryError } from './errors';
-import type {
-  VerifiedRobinhoodAuthorizationGrant,
-  VerifiedRobinhoodAuthorizationProvider,
-} from './authorization';
+
+const toolTimeoutMs = 15_000;
 
 export interface McpTransport {
   call<T>(
@@ -18,73 +21,119 @@ export interface McpTransport {
   ): Promise<T>;
 }
 
-export interface HttpMcpTransportOptions {
+export interface McpSdkClient {
+  connect(): Promise<void>;
+  listTools(): Promise<{ tools: readonly { name: string }[] }>;
+  callTool(
+    request: {
+      name: AllowedRobinhoodTool;
+      arguments: Readonly<Record<string, unknown>>;
+    },
+    options: { timeout: number },
+  ): Promise<CallToolResult>;
+  close(): Promise<void>;
+}
+
+export interface McpClientFactoryInput {
+  endpoint: URL;
+  authProvider: AuthProvider | OAuthClientProvider;
+}
+
+export type McpClientFactory = (input: McpClientFactoryInput) => McpSdkClient;
+
+export interface SdkMcpTransportOptions {
   endpoint: string;
   approvedEndpointOrigins: readonly string[];
-  expectedIssuer: string;
-  expectedAudience: string;
-  authorizationProvider: VerifiedRobinhoodAuthorizationProvider;
-  fetchImplementation?: typeof fetch;
-  now?: () => Date;
+  authProvider: AuthProvider | OAuthClientProvider;
+  clientFactory?: McpClientFactory;
 }
 
-interface McpJsonRpcResponse<T> {
-  jsonrpc: '2.0';
-  id: string;
-  result?: T;
-  error?: { code: number; message: string };
+function createMcpSdkClient({ endpoint, authProvider }: McpClientFactoryInput): McpSdkClient {
+  const client = new Client({ name: 'aurum-portfolio', version: '0.1.0' });
+  const transport = new StreamableHTTPClientTransport(endpoint, { authProvider });
+
+  return {
+    connect: () => client.connect(transport),
+    listTools: () => client.listTools(),
+    callTool: (request, options) => client.callTool(request, options),
+    close: () => client.close(),
+  };
 }
 
-export class HttpMcpTransport implements McpTransport {
-  private readonly fetchImplementation: typeof fetch;
-  private readonly endpoint: string;
-  private readonly endpointOrigin: string;
-  private readonly now: () => Date;
+function parseApprovedEndpoint(
+  endpointValue: string,
+  approvedEndpointOrigins: readonly string[],
+): URL {
+  let endpoint: URL;
+  try {
+    endpoint = new URL(endpointValue);
+  } catch {
+    throw new ProviderBoundaryError('provider_protocol_error');
+  }
+  if (
+    endpoint.protocol !== 'https:' ||
+    endpoint.username.length > 0 ||
+    endpoint.password.length > 0
+  ) {
+    throw new ProviderBoundaryError('provider_protocol_error');
+  }
 
-  constructor(private readonly options: HttpMcpTransportOptions) {
-    let endpoint: URL;
-    try {
-      endpoint = new URL(options.endpoint);
-    } catch {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
-    if (
-      endpoint.protocol !== 'https:' ||
-      endpoint.username.length > 0 ||
-      endpoint.password.length > 0
-    ) {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
-    let approvedOrigins: Set<string>;
-    try {
-      approvedOrigins = new Set(
-        options.approvedEndpointOrigins.map((value) => {
-          const origin = new URL(value);
-          if (
-            origin.protocol !== 'https:' ||
-            origin.username.length > 0 ||
-            origin.password.length > 0
-          ) {
-            throw new Error('invalid approved origin');
-          }
-          return origin.origin;
-        }),
-      );
-    } catch {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
-    if (
-      approvedOrigins.size === 0 ||
-      !approvedOrigins.has(endpoint.origin) ||
-      options.expectedIssuer.trim().length === 0 ||
-      options.expectedAudience.trim().length === 0
-    ) {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
-    this.endpoint = endpoint.href;
-    this.endpointOrigin = endpoint.origin;
-    this.fetchImplementation = options.fetchImplementation ?? fetch;
-    this.now = options.now ?? (() => new Date());
+  let approvedOrigins: Set<string>;
+  try {
+    approvedOrigins = new Set(
+      approvedEndpointOrigins.map((value) => {
+        const origin = new URL(value);
+        if (
+          origin.protocol !== 'https:' ||
+          origin.username.length > 0 ||
+          origin.password.length > 0
+        ) {
+          throw new Error('invalid approved origin');
+        }
+        return origin.origin;
+      }),
+    );
+  } catch {
+    throw new ProviderBoundaryError('provider_protocol_error');
+  }
+
+  if (approvedOrigins.size === 0 || !approvedOrigins.has(endpoint.origin)) {
+    throw new ProviderBoundaryError('provider_protocol_error');
+  }
+  return endpoint;
+}
+
+function structuredData(result: CallToolResult): unknown {
+  const content = result.structuredContent;
+  if (
+    typeof content !== 'object' ||
+    content === null ||
+    !Object.hasOwn(content, 'data')
+  ) {
+    throw new ProviderBoundaryError('provider_protocol_error');
+  }
+  return (content as { data: unknown }).data;
+}
+
+export class SdkMcpTransport implements McpTransport {
+  private readonly endpoint: URL;
+  private readonly clientFactory: McpClientFactory;
+  private client: McpSdkClient | undefined;
+  private connection: Promise<McpSdkClient> | undefined;
+
+  constructor(options: SdkMcpTransportOptions) {
+    this.endpoint = parseApprovedEndpoint(
+      options.endpoint,
+      options.approvedEndpointOrigins,
+    );
+    this.clientFactory = options.clientFactory ?? createMcpSdkClient;
+    this.authProvider = options.authProvider;
+  }
+
+  private readonly authProvider: AuthProvider | OAuthClientProvider;
+
+  async connect(): Promise<void> {
+    await this.connectedClient();
   }
 
   async call<T>(
@@ -92,92 +141,64 @@ export class HttpMcpTransport implements McpTransport {
     args: Readonly<Record<string, unknown>>,
   ): Promise<T> {
     assertAllowedRobinhoodTool(tool);
-    let grant: VerifiedRobinhoodAuthorizationGrant;
+
+    let result: CallToolResult;
     try {
-      grant = await this.options.authorizationProvider.getVerifiedAuthorization({
-        endpointOrigin: this.endpointOrigin,
-        expectedIssuer: this.options.expectedIssuer,
-        expectedAudience: this.options.expectedAudience,
-        requiredScopes: requiredRobinhoodReadScopes,
-      });
-    } catch {
-      throw new ProviderBoundaryError('provider_authorization_invalid');
-    }
-    try {
-      parseExactRobinhoodReadScopes(grant.actualScopes.join(','));
-    } catch {
-      throw new ProviderBoundaryError('provider_scope_invalid');
-    }
-    const expiresAt = Date.parse(grant.expiresAt);
-    if (
-      !/^Bearer \S+$/.test(grant.header) ||
-      grant.issuer !== this.options.expectedIssuer ||
-      grant.audience !== this.options.expectedAudience ||
-      (grant.verification !== 'signed_claims' &&
-        grant.verification !== 'oauth_introspection') ||
-      !Number.isFinite(expiresAt) ||
-      expiresAt <= this.now().getTime()
-    ) {
-      throw new ProviderBoundaryError('provider_authorization_invalid');
-    }
-    let authorizedOrigin: string;
-    try {
-      authorizedOrigin = new URL(grant.authorizedEndpointOrigin).origin;
-    } catch {
-      throw new ProviderBoundaryError('provider_authorization_invalid');
-    }
-    if (authorizedOrigin !== this.endpointOrigin) {
-      throw new ProviderBoundaryError('provider_authorization_invalid');
-    }
-    const authorization = grant.header;
-    const id = randomUUID();
-    let response: Response;
-    try {
-      response = await this.fetchImplementation(this.endpoint, {
-        method: 'POST',
-        headers: {
-          'content-type': 'application/json',
-        authorization,
-        },
-        body: JSON.stringify({
-          jsonrpc: '2.0',
-          id,
-          method: 'tools/call',
-          params: { name: tool, arguments: args },
-        }),
-        redirect: 'error',
-        signal: AbortSignal.timeout(15_000),
-      });
+      result = await (await this.connectedClient()).callTool(
+        { name: tool, arguments: args },
+        { timeout: toolTimeoutMs },
+      );
     } catch (error) {
-      if (
-        error instanceof DOMException &&
-        (error.name === 'AbortError' || error.name === 'TimeoutError')
-      ) {
-        throw new ProviderBoundaryError('provider_timeout');
-      }
+      if (error instanceof ProviderBoundaryError) throw error;
       throw new ProviderBoundaryError('provider_http_error');
     }
 
-    if (!response.ok) {
-      throw new ProviderBoundaryError('provider_http_error');
-    }
+    return structuredData(result) as T;
+  }
 
-    let body: McpJsonRpcResponse<T>;
+  async close(): Promise<void> {
+    const client = this.client ?? (this.connection ? await this.connection : undefined);
+    this.client = undefined;
+    this.connection = undefined;
+    if (!client) return;
     try {
-      body = (await response.json()) as McpJsonRpcResponse<T>;
+      await client.close();
     } catch {
-      throw new ProviderBoundaryError('provider_protocol_error');
+      throw new ProviderBoundaryError('provider_http_error');
     }
-    if (body.id !== id || body.jsonrpc !== '2.0') {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
-    if (body.error) {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
-    if (body.result === undefined) {
-      throw new ProviderBoundaryError('provider_protocol_error');
-    }
+  }
 
-    return body.result;
+  private async connectedClient(): Promise<McpSdkClient> {
+    if (this.client) return this.client;
+    if (!this.connection) {
+      this.connection = this.initializeClient();
+    }
+    return this.connection;
+  }
+
+  private async initializeClient(): Promise<McpSdkClient> {
+    const client = this.clientFactory({
+      endpoint: this.endpoint,
+      authProvider: this.authProvider,
+    });
+    try {
+      await client.connect();
+      const advertised = new Set((await client.listTools()).tools.map((tool) => tool.name));
+      if (allowedRobinhoodTools.some((tool) => !advertised.has(tool))) {
+        throw new ProviderBoundaryError('provider_protocol_error');
+      }
+      this.client = client;
+      return client;
+    } catch (error) {
+      try {
+        await client.close();
+      } catch {
+        // The original initialization error is the useful, already-redacted boundary error.
+      }
+      if (error instanceof ProviderBoundaryError) throw error;
+      throw new ProviderBoundaryError('provider_http_error');
+    } finally {
+      this.connection = undefined;
+    }
   }
 }
