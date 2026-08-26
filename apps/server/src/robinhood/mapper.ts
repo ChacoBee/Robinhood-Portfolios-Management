@@ -24,6 +24,7 @@ export type UnavailableMoneyReason =
   | 'cash_missing'
   | 'buying_power_missing'
   | 'accrued_missing'
+  | 'known_unsupported_aggregate_missing'
   | 'provider_market_value_missing'
   | 'cost_basis_missing'
   | 'unsupported_currency';
@@ -49,6 +50,7 @@ export interface AccountValueObservation {
   cash: AvailableMoney;
   buyingPower: AvailableMoney;
   accrued: AvailableMoney;
+  knownUnsupportedAggregate: AvailableMoney;
   currency: string;
   sourceAsOf: string;
 }
@@ -120,6 +122,27 @@ function mapProviderMoney(value: string | null | undefined, currency: string, re
   if (currency !== 'USD') return unavailable('unsupported_currency');
   return { state: 'available', value: decimalMoney(value, currency) };
 }
+function mapKnownUnsupportedAggregate(portfolio: ProviderPortfolioResponse): AvailableMoney {
+  const components = [
+    portfolio.futures_value,
+    portfolio.event_contracts_value,
+    portfolio.crypto_value,
+    portfolio.mutual_funds_value,
+    portfolio.fixed_income_value,
+  ];
+  const availableComponents = components.filter(
+    (component): component is string => component !== null,
+  );
+  if (availableComponents.length !== components.length) {
+    return unavailable('known_unsupported_aggregate_missing');
+  }
+  if (portfolio.currency !== 'USD') return unavailable('unsupported_currency');
+  const total = availableComponents.reduce(
+    (sum, component) => sum.plus(component),
+    new Decimal(0),
+  );
+  return { state: 'available', value: decimalMoney(total.toString(), portfolio.currency) };
+}
 function normalizedAccountType(value: string | null | undefined): string {
   if (!value) return 'Robinhood account';
   return value.replace(/[_-]+/g, ' ').replace(/\b\w/g, (letter) => letter.toUpperCase());
@@ -147,6 +170,7 @@ export function mapPortfolio(portfolio: ProviderPortfolioResponse, providerRef: 
       'buying_power_missing',
     ),
     accrued: mapProviderMoney(portfolio.pending_deposits, portfolio.currency, 'accrued_missing'),
+    knownUnsupportedAggregate: mapKnownUnsupportedAggregate(portfolio),
     currency: portfolio.currency,
     sourceAsOf: receivedAt,
   };

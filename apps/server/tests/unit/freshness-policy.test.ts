@@ -32,6 +32,7 @@ function promotionBundle(input: {
       cash: { state: 'available', value: usd(input.total) },
       buyingPower: { state: 'available', value: usd(input.total) },
       accrued: { state: 'available', value: usd('0') },
+      knownUnsupportedAggregate: { state: 'available', value: usd('0') },
       currency: 'USD',
       sourceAsOf: at,
     },

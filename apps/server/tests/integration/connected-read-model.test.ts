@@ -69,6 +69,7 @@ async function setupConnectedSource(
         providerTotal: '125',
         cash: '25',
         accrued: '0',
+        knownUnsupportedAggregate: '0',
         supportedPositionValue: '100',
         unsupportedDetailValue: '0',
         modeledTotal: '125',

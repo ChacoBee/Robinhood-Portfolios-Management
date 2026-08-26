@@ -90,6 +90,7 @@ export interface AccountPromotionDetail {
   providerTotal: string;
   cash: string;
   accrued: string;
+  knownUnsupportedAggregate: string;
   supportedPositionValue: string;
   unsupportedDetailValue: string;
   modeledTotal: string;
@@ -195,6 +196,7 @@ function canonicalFingerprint(accounts: readonly AccountPromotionDetail[]): stri
       providerTotal: account.providerTotal,
       cash: account.cash,
       accrued: account.accrued,
+      knownUnsupportedAggregate: account.knownUnsupportedAggregate,
       accountSourceAsOf: account.accountSourceAsOf,
       portfolioSourceAsOf: account.portfolioSourceAsOf,
       sourceWindowStart: account.sourceWindowStart,
@@ -293,6 +295,10 @@ export function buildSnapshotPromotion(
     );
     const cash = availableValue(bundle.portfolio.cash, 'cash_unavailable');
     const accrued = availableValue(bundle.portfolio.accrued, 'accrued_unavailable');
+    const knownUnsupportedAggregate = availableValue(
+      bundle.portfolio.knownUnsupportedAggregate,
+      'account_reconciliation_ineligible',
+    );
     const included =
       bundle.account.status === 'active' || compareMoney(providerTotal, usd(0)) !== 0;
     const inclusionReason =
@@ -351,6 +357,9 @@ export function buildSnapshotPromotion(
         .filter((position) => position.detailSupport === 'known_unsupported')
         .map((position) => usd(position.marketValue)),
       ...optionPositions.map((position) => usd(position.marketValue)),
+      ...(compareMoney(knownUnsupportedAggregate, usd(0)) === 0
+        ? []
+        : [knownUnsupportedAggregate]),
     ];
     const supportedPositionValue = sumMoney(supportedValues);
     const unsupportedDetailValue = sumMoney(unsupportedValues);
@@ -385,6 +394,7 @@ export function buildSnapshotPromotion(
       providerTotal: providerTotal.amount,
       cash: cash.amount,
       accrued: accrued.amount,
+      knownUnsupportedAggregate: knownUnsupportedAggregate.amount,
       supportedPositionValue: supportedPositionValue.amount,
       unsupportedDetailValue: unsupportedDetailValue.amount,
       modeledTotal: reconciliation.modeledTotal?.amount ?? '0',
@@ -411,6 +421,7 @@ export function buildSnapshotPromotion(
         total: providerTotal.amount,
         cash: cash.amount,
         accrued: accrued.amount,
+        knownUnsupportedAggregate: knownUnsupportedAggregate.amount,
         currency: bundle.portfolio.currency,
         sourceAsOf: bundle.portfolio.sourceAsOf,
       }),

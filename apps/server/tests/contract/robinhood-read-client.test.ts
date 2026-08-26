@@ -20,6 +20,12 @@ const account = {
   option_level: '', state: 'active', deactivated: false,
   permanently_deactivated: false, nickname: 'Primary brokerage',
 };
+const portfolio = {
+  total_value: '175', equity_value: '125', options_value: '25', futures_value: '0',
+  event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0',
+  mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD',
+  buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' },
+};
 const equityPosition = {
   symbol: 'AAPL', quantity: '2', intraday_quantity: '0', shares_available_for_sells: '2',
   shares_held_for_sells: '0', shares_held_for_stock_grants: '0',
@@ -71,7 +77,7 @@ describe('Robinhood live read contract', () => {
   it('maps sanitized live envelopes, uses live argument names, and sends only cursor values', async () => {
     const transport = new FixtureTransport({
       get_accounts: [{ accounts: [account, null] }],
-      get_portfolio: [{ total_value: '175', equity_value: '125', options_value: '25', futures_value: '0', event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0', mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD', buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' } }],
+      get_portfolio: [portfolio],
       get_equity_positions: [{ positions: [equityPosition], next: 'https://provider.example/positions?cursor=cursor-2' }, { positions: [] }],
       get_equity_quotes: [{ results: [{ quote: equityQuote, close: equityClose }] }],
       get_option_positions: [{ positions: [optionPosition] }],
@@ -85,6 +91,7 @@ describe('Robinhood live read contract', () => {
     await expect(client.readPortfolio(reference)).resolves.toMatchObject({
       total: { state: 'available', value: { amount: '175', currency: 'USD' } },
       buyingPower: { state: 'available', value: { amount: '25', currency: 'USD' } },
+      knownUnsupportedAggregate: { state: 'available', value: { amount: '0', currency: 'USD' } },
     });
     await expect(client.readEquityPositions(reference)).resolves.toHaveLength(1);
     await expect(client.readEquityQuotes([{ instrumentId: 'AAPL', symbol: 'AAPL' }])).resolves.toMatchObject([{ price: { amount: '125.5', currency: 'USD' }, sourceAsOf: '2026-08-25T14:00:30.000Z' }]);
@@ -103,6 +110,14 @@ describe('Robinhood live read contract', () => {
       { tool: 'get_option_quotes', args: { instrument_ids: ['option-1'] } },
       { tool: 'get_option_instruments', args: { ids: 'option-1' } },
     ]);
+  });
+
+  it('marks the known-unsupported aggregate unavailable when a required portfolio component is null', async () => {
+    await expect(new RobinhoodReadClient(new FixtureTransport({
+      get_portfolio: [{ ...portfolio, crypto_value: null }],
+    }), vault()).readPortfolio(vault().seal(account.account_number))).resolves.toMatchObject({
+      knownUnsupportedAggregate: { state: 'unavailable', reason: 'known_unsupported_aggregate_missing' },
+    });
   });
 
   it('accepts known null account arrays but rejects unexpected fields, malformed numbers, and null required quotes', async () => {
