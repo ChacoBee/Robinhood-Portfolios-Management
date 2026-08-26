@@ -78,7 +78,7 @@ export interface OwnerRefreshState {
   userId: string;
   lastSuccessfulRefreshAt: string | null;
   currentSnapshotAsOf: string | null;
-  currentSnapshotRegularCloseEligible: boolean;
+  lastRegularCloseCheckpointAsOf: string | null;
 }
 
 export interface PortfolioRepository {
@@ -808,7 +808,7 @@ function createPortfolioRepository(
         user_id: string;
         last_successful_refresh_at: string | Date | null;
         current_snapshot_as_of: string | Date | null;
-        current_snapshot_regular_close_eligible: boolean | null;
+        last_regular_close_checkpoint_as_of: string | Date | null;
       }>(
         `select
            owner.id as user_id,
@@ -824,14 +824,11 @@ function createPortfolioRepository(
              limit 1
            ) as current_snapshot_as_of,
            (
-             select coalesce(
-               snapshot.payload->'quality'->>'regularSessionCloseEligible' = 'true',
-               false
-             )
+             select max(snapshot.as_of)
              from portfolio_snapshots snapshot
-             where snapshot.user_id = owner.id and snapshot.is_current = true
-             limit 1
-           ) as current_snapshot_regular_close_eligible
+             where snapshot.user_id = owner.id
+               and snapshot.payload->'quality'->>'regularSessionCloseEligible' = 'true'
+           ) as last_regular_close_checkpoint_as_of
          from users owner`,
       );
       return result.rows.map((row) => ({
@@ -844,8 +841,10 @@ function createPortfolioRepository(
           row.current_snapshot_as_of === null
             ? null
             : toIso(row.current_snapshot_as_of),
-        currentSnapshotRegularCloseEligible:
-          row.current_snapshot_regular_close_eligible === true,
+        lastRegularCloseCheckpointAsOf:
+          row.last_regular_close_checkpoint_as_of === null
+            ? null
+            : toIso(row.last_regular_close_checkpoint_as_of),
       }));
     },
   };
