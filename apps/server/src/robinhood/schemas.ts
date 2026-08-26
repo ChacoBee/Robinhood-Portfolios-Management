@@ -43,10 +43,14 @@ const ProviderEquityQuotePayloadSchema = z.object({
   last_non_reg_trade_price: nullableDecimal, venue_last_non_reg_trade_time: TimestampSchema.nullable(),
   adjusted_previous_close: DecimalStringSchema, previous_close: DecimalStringSchema,
   previous_close_date: z.string().min(1).nullable(), bid_price: DecimalStringSchema,
-  bid_size: DecimalStringSchema, ask_price: DecimalStringSchema, ask_size: DecimalStringSchema,
-  has_traded: z.boolean(), state: z.string().min(1), updated_at: TimestampSchema.optional(),
+  venue_bid_time: TimestampSchema, ask_price: DecimalStringSchema, venue_ask_time: TimestampSchema,
+  has_traded: z.boolean(), state: z.string().min(1),
 }).strict();
-export const ProviderQuoteSchema = z.object({ quote: ProviderEquityQuotePayloadSchema, close: z.boolean().optional() }).strict();
+const ProviderEquityCloseSchema = z.object({
+  symbol: z.string().min(1), date: z.string().nullable(), price: z.string().nullable(),
+  interpolated: z.boolean().nullable(), source: z.string().nullable(),
+}).strict();
+export const ProviderQuoteSchema = z.object({ quote: ProviderEquityQuotePayloadSchema, close: ProviderEquityCloseSchema.nullable().optional() }).strict();
 export const ProviderQuotesResponseSchema = z.object({ results: z.array(ProviderQuoteSchema.nullable()).nullable() }).strict();
 
 export const ProviderOptionPositionSchema = z.object({
@@ -63,14 +67,32 @@ export const ProviderOptionPositionsResponseSchema = z.object({
 }).strict();
 
 const ProviderOptionQuotePayloadSchema = z.object({
-  instrument_id: z.string().min(1), mark_price: DecimalStringSchema, updated_at: TimestampSchema.optional(),
+  instrument_id: z.string().min(1), ask_price: DecimalStringSchema, ask_size: z.number().int(),
+  bid_price: DecimalStringSchema, bid_size: z.number().int(), break_even_price: DecimalStringSchema,
+  adjusted_mark_price: DecimalStringSchema, mark_price: DecimalStringSchema,
+  high_fill_rate_buy_price: DecimalStringSchema, low_fill_rate_buy_price: DecimalStringSchema,
+  high_fill_rate_sell_price: DecimalStringSchema, low_fill_rate_sell_price: DecimalStringSchema,
+  previous_close_price: DecimalStringSchema, previous_close_date: z.string().min(1),
+  implied_volatility: z.string().nullable(), delta: z.string().nullable(), gamma: z.string().nullable(),
+  rho: z.string().nullable(), theta: z.string().nullable(), vega: z.string().nullable(),
+  open_interest: z.number().int(), volume: z.number().int(), chance_of_profit_long: z.string().nullable(),
+  chance_of_profit_short: z.string().nullable(), updated_at: TimestampSchema,
 }).strict();
-export const ProviderOptionQuoteSchema = z.object({ quote: ProviderOptionQuotePayloadSchema, close: z.boolean().optional() }).strict();
+const ProviderOptionCloseSchema = z.object({
+  instrument_id: z.string().min(1), symbol: z.string().min(1), date: z.string().nullable(),
+  price: z.string().nullable(), interpolated: z.boolean().nullable(), source: z.string().nullable(),
+}).strict();
+export const ProviderOptionQuoteSchema = z.object({ quote: ProviderOptionQuotePayloadSchema, close: ProviderOptionCloseSchema.nullable().optional() }).strict();
 export const ProviderOptionQuotesResponseSchema = z.object({ results: z.array(ProviderOptionQuoteSchema.nullable()).nullable() }).strict();
 
 export const ProviderOptionInstrumentSchema = z.object({
-  id: z.string().min(1), trade_value_multiplier: DecimalStringSchema,
-  chain_id: z.string().min(1), chain_symbol: z.string().min(1),
+  id: z.string().min(1), chain_id: z.string().min(1), chain_symbol: z.string().min(1),
+  underlying_type: z.string().min(1), expiration_date: z.string().min(1), sellout_datetime: TimestampSchema,
+  strike_price: DecimalStringSchema, type: z.string().min(1), state: z.string().min(1),
+  tradability: z.string().min(1), trade_value_multiplier: DecimalStringSchema,
+  min_ticks: z.object({
+    above_tick: DecimalStringSchema, below_tick: DecimalStringSchema, cutoff_price: DecimalStringSchema,
+  }).strict(),
 }).strict();
 export const ProviderOptionInstrumentsResponseSchema = z.object({
   instruments: z.array(ProviderOptionInstrumentSchema.nullable()).nullable(), next: z.string().url().optional(),

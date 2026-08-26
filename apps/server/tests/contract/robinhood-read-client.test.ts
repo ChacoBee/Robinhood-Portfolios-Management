@@ -30,9 +30,11 @@ const equityQuote = {
   symbol: 'AAPL', last_trade_price: '125.50', venue_last_trade_time: '2026-08-25T14:00:30.000Z',
   last_non_reg_trade_price: null, venue_last_non_reg_trade_time: null,
   adjusted_previous_close: '124', previous_close: '124', previous_close_date: '2026-08-22',
-  bid_price: '125.40', bid_size: '1', ask_price: '125.60', ask_size: '1', has_traded: true,
-  state: 'open', updated_at: '2026-08-25T14:00:30.000Z',
+  bid_price: '125.40', venue_bid_time: '2026-08-25T14:00:30.000Z',
+  ask_price: '125.60', venue_ask_time: '2026-08-25T14:00:30.000Z', has_traded: true,
+  state: 'open',
 };
+const equityClose = { symbol: 'AAPL', date: null, price: null, interpolated: null, source: null };
 const optionPosition = {
   option_id: 'option-1', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000', type: 'option',
   quantity: '1', average_price: '0.20', expiration_date: '2026-09-18', trade_value_multiplier: '100',
@@ -40,8 +42,23 @@ const optionPosition = {
   pending_sell_quantity: '0', pending_assignment_quantity: '0', pending_exercise_quantity: '0',
   pending_expiration_quantity: '0', opened_at: '2026-08-01T14:00:00.000Z',
 };
-const optionQuote = { instrument_id: 'option-1', mark_price: '0.25', updated_at: '2026-08-25T14:00:30.000Z' };
-const optionInstrument = { id: 'option-1', trade_value_multiplier: '100', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000' };
+const optionQuote = {
+  instrument_id: 'option-1', ask_price: '0.26', ask_size: 1, bid_price: '0.24', bid_size: 1,
+  break_even_price: '100.25', adjusted_mark_price: '0.25', mark_price: '0.25',
+  high_fill_rate_buy_price: '0.26', low_fill_rate_buy_price: '0.24',
+  high_fill_rate_sell_price: '0.24', low_fill_rate_sell_price: '0.26',
+  previous_close_price: '0.22', previous_close_date: '2026-08-22',
+  implied_volatility: null, delta: null, gamma: null, rho: null, theta: null, vega: null,
+  open_interest: 1, volume: 1, chance_of_profit_long: null, chance_of_profit_short: null,
+  updated_at: '2026-08-25T14:00:30.000Z',
+};
+const optionClose = { instrument_id: 'option-1', symbol: 'AAPL 260918C00100000', date: null, price: null, interpolated: null, source: null };
+const optionInstrument = {
+  id: 'option-1', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000', underlying_type: 'equity',
+  expiration_date: '2026-09-18', sellout_datetime: '2026-09-18T20:00:00.000Z', strike_price: '100',
+  type: 'call', state: 'active', tradability: 'tradable', trade_value_multiplier: '100',
+  min_ticks: { above_tick: '0.05', below_tick: '0.01', cutoff_price: '3' },
+};
 
 describe('Robinhood live read contract', () => {
   it('keeps the exact seven-tool read allowlist', () => {
@@ -56,9 +73,9 @@ describe('Robinhood live read contract', () => {
       get_accounts: [{ accounts: [account, null] }],
       get_portfolio: [{ total_value: '175', equity_value: '125', options_value: '25', futures_value: '0', event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0', mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD', buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' } }],
       get_equity_positions: [{ positions: [equityPosition], next: 'https://provider.example/positions?cursor=cursor-2' }, { positions: [] }],
-      get_equity_quotes: [{ results: [{ quote: equityQuote, close: false }] }],
+      get_equity_quotes: [{ results: [{ quote: equityQuote, close: equityClose }] }],
       get_option_positions: [{ positions: [optionPosition] }],
-      get_option_quotes: [{ results: [{ quote: optionQuote, close: false }] }],
+      get_option_quotes: [{ results: [{ quote: optionQuote, close: optionClose }] }],
       get_option_instruments: [{ instruments: [optionInstrument] }],
     });
     const client = new RobinhoodReadClient(transport, vault(), () => new Date('2026-08-25T14:01:00.000Z'));
@@ -72,7 +89,9 @@ describe('Robinhood live read contract', () => {
     await expect(client.readEquityPositions(reference)).resolves.toHaveLength(1);
     await expect(client.readEquityQuotes([{ instrumentId: 'AAPL', symbol: 'AAPL' }])).resolves.toMatchObject([{ price: { amount: '125.5', currency: 'USD' }, sourceAsOf: '2026-08-25T14:00:30.000Z' }]);
     await expect(client.readOptionPositions(reference)).resolves.toMatchObject([{ symbol: optionPosition.chain_symbol }]);
-    await expect(client.readOptionQuotes(['option-1'])).resolves.toHaveLength(1);
+    await expect(client.readOptionQuotes(['option-1'])).resolves.toMatchObject([{
+      optionId: 'option-1', markPrice: '0.25', sourceAsOf: '2026-08-25T14:00:30.000Z',
+    }]);
     await expect(client.readOptionInstruments(['option-1'])).resolves.toHaveLength(1);
     expect(transport.calls).toEqual([
       { tool: 'get_accounts', args: {} },
@@ -92,6 +111,7 @@ describe('Robinhood live read contract', () => {
       { get_accounts: [{ accounts: [{ ...account, unexpected: true }] }] },
       { get_equity_positions: [{ positions: [{ ...equityPosition, quantity: 'not-a-number' }] }] },
       { get_equity_quotes: [{ results: [{ quote: null, close: false }] }] },
+      { get_equity_quotes: [{ results: [{ quote: { ...equityQuote, unexpected: true } }] }] },
     ];
     for (const responses of cases) {
       const client = new RobinhoodReadClient(new FixtureTransport(responses), vault());
@@ -100,6 +120,12 @@ describe('Robinhood live read contract', () => {
         : client.readEquityQuotes([{ instrumentId: 'AAPL', symbol: 'AAPL' }]);
       await expect(operation).rejects.toThrow('provider_schema_drift');
     }
+    await expect(new RobinhoodReadClient(new FixtureTransport({
+      get_option_quotes: [{ results: [{ quote: { ...optionQuote, mark_price: null } }] }],
+    }), vault()).readOptionQuotes(['option-1'])).rejects.toThrow('provider_schema_drift');
+    await expect(new RobinhoodReadClient(new FixtureTransport({
+      get_option_instruments: [{ instruments: [{ ...optionInstrument, unexpected: true }] }],
+    }), vault()).readOptionInstruments(['option-1'])).rejects.toThrow('provider_schema_drift');
   });
 
   it('rejects repeated pagination, duplicate rows, and missing requested option quote or instrument results', async () => {
