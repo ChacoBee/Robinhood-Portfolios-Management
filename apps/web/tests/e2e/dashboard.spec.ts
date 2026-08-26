@@ -44,6 +44,7 @@ test.describe('Aurum dashboard', () => {
     });
     await expect(page.locator('.side-rail')).toHaveCSS('width', '208px');
     await expect(page.locator('.global-header')).toHaveCSS('min-height', '68px');
+    expect((await page.locator('.global-header').boundingBox())?.height).toBe(68);
   });
 
   test('serves browser security headers on rendered routes', async ({ request }) => {
