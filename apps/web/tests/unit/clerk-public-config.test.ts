@@ -25,18 +25,25 @@ describe('public Clerk configuration', () => {
     })).toThrow('valid WEB_ORIGIN');
   });
 
-  it('derives the exact FAPI origin from a canonical Clerk key and ignores no caller-selected host', () => {
+  it('accepts a legacy FAPI value only when it exactly matches the canonical key origin', () => {
     expect(readClerkPublicConfig({
       CLERK_PUBLISHABLE_KEY: publicKey,
-      CLERK_FRONTEND_API_URL: 'https://attacker.example.test',
+      CLERK_FRONTEND_API_URL: `https://${frontendApi}`,
       WEB_ORIGIN: 'https://portfolio.example.test',
       NODE_ENV: 'production',
     })).toMatchObject({ frontendApiOrigin: `https://${frontendApi}` });
+
+    expect(() => readClerkPublicConfig({
+      CLERK_PUBLISHABLE_KEY: publicKey,
+      CLERK_FRONTEND_API_URL: 'https://stale.example.test',
+      WEB_ORIGIN: 'https://portfolio.example.test',
+      NODE_ENV: 'production',
+    })).toThrow('CLERK_FRONTEND_API_URL');
   });
 
   it('rejects malformed and regex-shaped but non-canonical Clerk keys', () => {
     for (const publishableKey of ['pk_live_not-base64', 'pk_live_aHR0cHM6Ly9ldmlsLmV4YW1wbGU=', 'pk_test_synthetic_public_identity_12345']) {
-      expect(() => readClerkPublicConfig({ publishableKey, WEB_ORIGIN: 'https://portfolio.example.test' })).toThrow('valid Clerk publishable key');
+      expect(() => readClerkPublicConfig({ CLERK_PUBLISHABLE_KEY: publishableKey, WEB_ORIGIN: 'https://portfolio.example.test' })).toThrow('valid Clerk publishable key');
     }
   });
 });

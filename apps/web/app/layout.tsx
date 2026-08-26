@@ -21,7 +21,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   const mode = configuredDataMode();
   return (
     <html lang="en">
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} data-aurum-hydrated="false">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         {mode === 'demo' ? (
           <DashboardShell apiBaseUrl="" mode="demo">{children}</DashboardShell>
         ) : (

@@ -42,9 +42,16 @@ export function readClerkPublicConfig(
   if (!isValidClerkPublishableKey(environment.CLERK_PUBLISHABLE_KEY)) {
     throw new Error('Connected mode requires a valid Clerk publishable key.');
   }
+  const derivedFrontendApiOrigin = frontendApiOrigin(environment.CLERK_PUBLISHABLE_KEY);
+  if (
+    environment.CLERK_FRONTEND_API_URL !== undefined &&
+    environment.CLERK_FRONTEND_API_URL !== derivedFrontendApiOrigin
+  ) {
+    throw new Error('CLERK_FRONTEND_API_URL must exactly match the FAPI origin derived from CLERK_PUBLISHABLE_KEY.');
+  }
   return {
     publishableKey: environment.CLERK_PUBLISHABLE_KEY,
-    frontendApiOrigin: frontendApiOrigin(environment.CLERK_PUBLISHABLE_KEY),
+    frontendApiOrigin: derivedFrontendApiOrigin,
     redirectOrigin: exactWebOrigin(environment.WEB_ORIGIN, environment.NODE_ENV),
   };
 }

@@ -6,8 +6,10 @@ import { formatDateTime } from '../../lib/formatters';
 import { csrfMutation } from '../../lib/api/csrf-mutation';
 import { EmptyState } from '../ui/EmptyState';
 import { AlertEvidence } from './AlertEvidence';
+import { useIslandReady } from '../../lib/client/use-island-ready';
 
 export function AlertsCenter({ alerts, sourceAsOf, mode, apiBaseUrl }: { alerts: AlertReadModel[]; sourceAsOf: string | null; mode: 'demo' | 'connected'; apiBaseUrl: string }) {
+  const ready = useIslandReady();
   const [items, setItems] = useState(alerts);
   const [state, setState] = useState<'all' | 'new' | 'read'>('all');
   const [expanded, setExpanded] = useState<string | null>(null);
@@ -99,7 +101,7 @@ export function AlertsCenter({ alerts, sourceAsOf, mode, apiBaseUrl }: { alerts:
     }
   }
   return (
-    <section className="data-card" aria-labelledby="alerts-list-title">
+    <section aria-busy={!ready} aria-labelledby="alerts-list-title" className="data-card" data-aurum-island="alerts-center" data-aurum-ready={ready ? 'true' : 'false'} inert={!ready}>
       <div className="card-heading-row"><div><p className="eyebrow">Inbox</p><h2 id="alerts-list-title">Portfolio alerts</h2></div><div aria-label="Filter alerts" className="segmented-control">{(['all', 'new', 'read'] as const).map((item) => <button aria-pressed={state === item} key={item} onClick={() => setState(item)} type="button">{item[0]!.toUpperCase() + item.slice(1)}</button>)}</div></div>
       {filtered.length ? <ul className="alert-list">{filtered.map((alert) => <li className={`severity-${alert.severity}`} key={alert.id}><span aria-hidden="true" className="alert-marker" /><div><div className="activity-title-row"><strong>{alert.title}</strong><span className={`status-chip is-${alert.state}`}>{alert.state}</span>{muted[alert.id] ? <span className="status-chip is-partial">Snoozed</span> : null}</div><p>{alert.description}</p><small>{formatDateTime(alert.createdAt)} · {alert.severity}</small><div className="alert-actions">{alert.state === 'new' ? <button disabled={pending === alert.id} onClick={() => void markRead(alert.id)} type="button">Mark read</button> : null}<button aria-expanded={expanded === alert.id} onClick={() => setExpanded((current) => current === alert.id ? null : alert.id)} type="button">Evidence</button><button disabled={pending === alert.id} onClick={() => void snooze(alert.id)} type="button">Snooze 24h</button>{muted[alert.id] ? <button disabled={pending === alert.id} onClick={() => void unmute(alert.id)} type="button">Unmute</button> : null}</div>{expanded === alert.id ? <AlertEvidence alert={alert} sourceAsOf={sourceAsOf} /> : null}</div></li>)}</ul> : <EmptyState title="No alerts in this view" description="Your selected alert state is clear." />}
       {message ? <p className="inline-error" role="alert">{message}</p> : null}

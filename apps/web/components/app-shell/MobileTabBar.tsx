@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { pathIsActive } from './navigation';
+import { useIslandReady } from '../../lib/client/use-island-ready';
 
 const directTabs = [
   { label: 'Overview', href: '/', glyph: 'OV' },
@@ -19,6 +20,7 @@ const moreTabs = [
 ] as const;
 
 export function MobileTabBar() {
+  const ready = useIslandReady();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -45,7 +47,7 @@ export function MobileTabBar() {
   }, [open]);
 
   return (
-    <nav aria-label="Mobile primary" className="mobile-tab-bar">
+    <nav aria-busy={!ready} aria-label="Mobile primary" className="mobile-tab-bar" data-aurum-island="mobile-navigation" data-aurum-ready={ready ? 'true' : 'false'} inert={!ready}>
       {directTabs.map((item) => (
         <Link
           aria-current={pathIsActive(pathname, item.href) ? 'page' : undefined}
@@ -79,6 +81,7 @@ export function MobileTabBar() {
           aria-haspopup="menu"
           aria-label="More navigation"
           className="mobile-tab"
+          disabled={!ready}
           onClick={() => setOpen((current) => !current)}
           ref={buttonRef}
           type="button"

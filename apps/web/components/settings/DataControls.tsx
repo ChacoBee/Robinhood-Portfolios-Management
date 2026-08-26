@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from 'react';
 import { csrfMutation } from '../../lib/api/csrf-mutation';
+import { useIslandReady } from '../../lib/client/use-island-ready';
 
 const demoConfirmation = 'DELETE SYNTHETIC DEMO';
 
 export function DataControls({ mode, apiBaseUrl }: { mode: 'demo' | 'connected'; apiBaseUrl: string }) {
+  const ready = useIslandReady();
   const [retention, setRetention] = useState('30');
   const [typed, setTyped] = useState('');
   const [message, setMessage] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function DataControls({ mode, apiBaseUrl }: { mode: 'demo' | 'connected';
   }
 
   return (
-    <section className="settings-card settings-card-wide">
+    <section aria-busy={!ready} className="settings-card settings-card-wide" data-aurum-island="data-controls" data-aurum-ready={ready ? 'true' : 'false'} inert={!ready}>
       <div><p className="eyebrow">Data controls</p><h2>Retention, export, and deletion</h2><p>High-frequency observations and import evidence have separate lifecycles. Deletion previews describe retained backups before any irreversible action.</p></div>
       <div className="data-control-grid">
         <label><span>Intraday retention</span><select onChange={(event) => setRetention(event.target.value)} value={retention}><option value="30">30 days</option><option value="60">60 days</option><option value="90">90 days</option></select><small>Daily rollups remain until owner deletion.</small></label>

@@ -29,6 +29,7 @@ describe('AlertsCenter', () => {
   it('marks alerts read, exposes evidence, and supports local snooze controls', async () => {
     const user = userEvent.setup();
     render(<ScreenPrivacyProvider><AlertsCenter alerts={[{ id: 'alert-a', title: 'Synthetic watch', description: 'Synthetic evidence.', severity: 'watch', state: 'new', createdAt: '2026-08-25T12:00:00.000Z', mutedUntil: null, evidence }]} apiBaseUrl="" mode="demo" sourceAsOf="2026-08-25T11:59:00.000Z" /></ScreenPrivacyProvider>);
+    await waitFor(() => expect(screen.getByLabelText('Portfolio alerts')).toHaveAttribute('data-aurum-ready', 'true'));
     await user.click(screen.getByRole('button', { name: 'Evidence' }));
     expect(screen.getByText('Source as of')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Mark read' }));

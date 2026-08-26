@@ -1,16 +1,19 @@
 'use client';
 
 import { useScreenPrivacy } from '../../lib/privacy/privacy-context';
+import { useIslandReady } from '../../lib/client/use-island-ready';
 
 export function ScreenPrivacyToggle() {
+  const ready = useIslandReady();
   const { hidden, toggle } = useScreenPrivacy();
 
   return (
-    <>
+    <span aria-busy={!ready} data-aurum-island="screen-privacy" data-aurum-ready={ready ? 'true' : 'false'} inert={!ready}>
       <button
         aria-label={hidden ? 'Show financial values' : 'Hide financial values'}
         aria-pressed={hidden}
         className="icon-button privacy-toggle"
+        disabled={!ready}
         onClick={toggle}
         type="button"
       >
@@ -25,6 +28,6 @@ export function ScreenPrivacyToggle() {
       <span aria-live="polite" className="sr-only" role="status">
         Financial values {hidden ? 'hidden' : 'visible'}
       </span>
-    </>
+    </span>
   );
 }

@@ -4,6 +4,7 @@ import { useMemo, useRef, useState } from 'react';
 import { formatMoney } from '../../lib/formatters';
 import { csrfMutation } from '../../lib/api/csrf-mutation';
 import { FinancialValue } from '../ui/FinancialValue';
+import { useIslandReady } from '../../lib/client/use-island-ready';
 
 type ImportDecision = 'accepted' | 'duplicate' | 'review_required' | 'rejected';
 type PreviewRow = {
@@ -92,6 +93,7 @@ export function ImportScreen({
   mode: 'demo' | 'connected';
   apiBaseUrl: string;
 }) {
+  const ready = useIslandReady();
   const [preview, setPreview] = useState<Preview | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [state, setState] = useState<'select' | 'preview' | 'confirming' | 'complete'>('select');
@@ -195,7 +197,7 @@ export function ImportScreen({
   }
 
   return (
-    <section aria-labelledby="import-title" className="data-card import-workflow">
+    <section aria-busy={!ready} aria-labelledby="import-title" className="data-card import-workflow" data-aurum-island="import-screen" data-aurum-ready={ready ? 'true' : 'false'} inert={!ready}>
       <div className="import-steps" aria-label="Import progress">
         {['Select', 'Preview', 'Confirm'].map((label, index) => {
           const active = state === 'select' ? 0 : state === 'preview' || state === 'confirming' ? 1 : 2;
