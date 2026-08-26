@@ -1,13 +1,19 @@
+'use client';
+
 import type { ReactNode } from 'react';
+import { usePathname } from 'next/navigation';
 import { RefreshControl } from './RefreshControl';
 import { ScreenPrivacyToggle } from './ScreenPrivacyToggle';
+import { pageContext } from './page-context';
 
 export function GlobalHeader({ mode, apiBaseUrl, userControl }: { mode: 'demo' | 'connected'; apiBaseUrl: string; userControl?: ReactNode }) {
+  const context = pageContext(usePathname() ?? '/');
+
   return (
     <header className="global-header">
       <div className="header-title">
-        <p className="eyebrow">All portfolios</p>
-        <p className="header-account-count">Read-only portfolio workspace</p>
+        <h1>{context.title}</h1>
+        <p className="header-account-count">{context.subtitle}</p>
       </div>
       <div className="header-actions">
         <span className="source-badge">
