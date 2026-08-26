@@ -11,7 +11,7 @@ docker compose --profile ops run --service-ports --rm connect-robinhood
 docker compose up -d --build api worker web
 ```
 
-The enrollment command prints the Robinhood authorization URL and waits for the browser callback. Approve only the expected read-only application authorization. Docker listens inside the one-shot container on `0.0.0.0:43117`, but Compose publishes the callback only as `127.0.0.1:43117`; the registered redirect remains exactly `http://127.0.0.1:43117/callback`. Do not start `worker` until enrollment has reported verification success.
+The enrollment command prints the Robinhood authorization URL and waits for the browser callback. Robinhood OAuth uses the provider scope exactly `internal`; that provider grant may expose write-capable tools and must not be described as provider read-only. Aurum enforces read-only behavior structurally: its worker has a compile-time and runtime seven-tool read allowlist, and neither the API nor browser exposes a generic MCP proxy. Docker listens inside the one-shot container on `0.0.0.0:43117`, but Compose publishes the callback only as `127.0.0.1:43117`; the registered redirect remains exactly `http://127.0.0.1:43117/callback`. Do not start `worker` until enrollment has reported verification success.
 
 Confirm local infrastructure through `http://127.0.0.1:8787/ready`; use `/v1/health` for provider, worker-heartbeat, and last-good-snapshot status. The API and worker preserve last-good snapshots when the provider is unavailable. Logs are intentionally redacted: never paste logs that contain credentials, cookies, authorization URLs, callback query strings, account identifiers, or portfolio data into tickets or chat.
 

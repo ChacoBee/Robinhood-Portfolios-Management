@@ -46,11 +46,29 @@ afterEach(async () => {
 describe('connected Compose runtime', () => {
   it('isolates each service secret set and gates startup on healthy dependencies', async () => {
     const { services } = await renderedCompose();
+    const environmentKeys = (name: string) => Object.keys(services[name]?.environment ?? {}).sort();
 
     expect(Object.keys(services).sort()).toEqual(['api', 'connect-robinhood', 'migrate', 'postgres', 'web', 'worker']);
     expect(services.postgres?.ports).toBeUndefined();
-    expect(services.migrate?.environment).toEqual(expect.objectContaining({ NODE_ENV: 'development', DATABASE_URL: expect.any(String) }));
-    expect(Object.keys(services.migrate?.environment ?? {}).sort()).toEqual(['DATABASE_URL', 'NODE_ENV']);
+    expect(environmentKeys('postgres')).toEqual(['POSTGRES_DB', 'POSTGRES_PASSWORD', 'POSTGRES_USER']);
+    expect(environmentKeys('migrate')).toEqual(['DATABASE_URL', 'NODE_ENV']);
+    expect(environmentKeys('api')).toEqual([
+      'API_HOST', 'APP_MODE', 'AURUM_TRUSTED_COMPOSITION_MODULE', 'CLERK_ISSUER_URL',
+      'CLERK_PUBLISHABLE_KEY', 'CLERK_SECRET_KEY', 'CSRF_SECRET', 'DATABASE_URL',
+      'NODE_ENV', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL', 'WEB_ORIGIN',
+    ]);
+    expect(environmentKeys('worker')).toEqual([
+      'ACCOUNT_REFERENCE_ENCRYPTION_KEY', 'APP_MODE', 'AURUM_TRUSTED_COMPOSITION_MODULE',
+      'DATABASE_URL', 'NODE_ENV', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL',
+      'ROBINHOOD_OAUTH_ENCRYPTION_KEY',
+    ]);
+    expect(environmentKeys('web')).toEqual([
+      'AURUM_API_URL', 'AURUM_DATA_MODE', 'CLERK_PUBLISHABLE_KEY', 'NODE_ENV', 'WEB_ORIGIN',
+    ]);
+    expect(environmentKeys('connect-robinhood')).toEqual([
+      'APP_MODE', 'DATABASE_URL', 'NODE_ENV', 'OWNER_CLERK_USER_ID', 'OWNER_EMAIL',
+      'ROBINHOOD_CALLBACK_BIND_HOST', 'ROBINHOOD_OAUTH_ENCRYPTION_KEY',
+    ]);
     expect(services.migrate?.depends_on?.postgres?.condition).toBe('service_healthy');
     expect(services.api?.depends_on?.migrate?.condition).toBe('service_completed_successfully');
     expect(services.web?.depends_on?.api?.condition).toBe('service_healthy');
@@ -58,9 +76,5 @@ describe('connected Compose runtime', () => {
     expect(services.web?.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '3000', target: 3000 })]);
     expect(services['connect-robinhood']?.profiles).toEqual(['ops']);
     expect(services['connect-robinhood']?.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '43117', target: 43117 })]);
-    expect(services.api?.environment).not.toHaveProperty('ROBINHOOD_OAUTH_ENCRYPTION_KEY');
-    expect(services.worker?.environment).not.toHaveProperty('CLERK_SECRET_KEY');
-    expect(services.web?.environment).not.toHaveProperty('DATABASE_URL');
-    expect(services['connect-robinhood']?.environment).not.toHaveProperty('CSRF_SECRET');
   });
 });

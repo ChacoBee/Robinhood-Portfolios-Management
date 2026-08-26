@@ -30,6 +30,29 @@ describe('connected BFF allowlist', () => {
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
 
+  it.each([
+    ['trailing slash', 'http://api:8787/', 'development'],
+    ['path', 'http://api:8787/internal', 'development'],
+    ['query', 'http://api:8787?debug=true', 'development'],
+    ['alternate port', 'http://api:8788', 'development'],
+    ['alternate host', 'http://api.internal:8787', 'development'],
+    ['credentials', 'http://user:password@api:8787', 'development'],
+    ['other plaintext service', 'http://service.example.test:8787', 'development'],
+    ['production loopback', 'http://127.0.0.1:8787', 'production'],
+  ])('rejects a %s BFF upstream without network access', async (_label, baseUrl, nodeEnvironment) => {
+    const fetcher = vi.fn<typeof fetch>();
+    const response = await forwardAurumRequest(
+      new Request('https://portfolio.example.test/api/aurum/v1/settings'),
+      '/v1/settings',
+      baseUrl,
+      fetcher,
+      nodeEnvironment,
+    );
+
+    expect(response.status).toBe(503);
+    expect(fetcher).not.toHaveBeenCalled();
+  });
+
   it('forwards only owner credentials and CSRF to an allowed mutation', async () => {
     const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
       new Response(JSON.stringify({ data: { state: 'queued' } }), {

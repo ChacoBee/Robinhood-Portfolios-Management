@@ -28,8 +28,9 @@ function safeApiBase(value: string, nodeEnvironment: string | undefined): string
   try {
     const url = new URL(value);
     const loopback = url.hostname === 'localhost' || url.hostname === '127.0.0.1';
+    const developmentLoopback = nodeEnvironment !== 'production' && loopback && url.protocol === 'http:';
     const composeApi = value === 'http://api:8787' && nodeEnvironment !== 'production';
-    if (url.protocol !== 'https:' && !(loopback && url.protocol === 'http:') && !composeApi) {
+    if (url.protocol !== 'https:' && !developmentLoopback && !composeApi) {
       return null;
     }
     if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) {

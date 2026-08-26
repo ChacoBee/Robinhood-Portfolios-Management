@@ -14,7 +14,7 @@ Required operator gates:
 
 - Create an invite-only Clerk application and pre-provision one owner.
 - Configure exact owner user ID, verified email, trusted web origin, CSP, and HTTPS redirect URIs.
-- Provision a dedicated Robinhood application OAuth/MCP client with exact read-only scopes.
+- Provision a dedicated Robinhood application OAuth/MCP client with provider scope exactly `internal`. That grant may expose write-capable tools; Aurum instead enforces read-only behavior through its closed seven-tool worker allowlist and the absence of any generic MCP proxy.
 - Implement/inject the verified grant provider backed by a managed KMS/secret store; do not use a raw bearer-token environment variable.
 - Pin the approved MCP origin in code and infrastructure egress policy.
 - Provision PostgreSQL with TLS, encrypted backups, point-in-time recovery, and least-privilege roles.
