@@ -20,8 +20,8 @@ function dec(value: string | number | null | undefined): Decimal | null { try { 
 const money = (value: Decimal | null) => value ? usd(value.toFixed()) : null;
 function quality(snapshot: Snapshot): AlertQualityContext {
   const data = rec(snapshot.payload); const q = data.quality && typeof data.quality === 'object' ? data.quality as Record<string, unknown> : {};
-  const unsupported = typeof q.unsupportedWeight === 'string' && dec(q.unsupportedWeight) ? q.unsupportedWeight : '0';
-  return { freshness: snapshot.freshness === 'fresh' || snapshot.freshness === 'stale' ? snapshot.freshness : 'unknown', coverage: snapshot.coverage === 'complete' ? 'complete' : snapshot.coverage === 'partial_known_unsupported' ? 'partial' : 'unavailable', reconciliation: snapshot.reconciliation_status === 'reconciled' ? 'reconciled' : snapshot.reconciliation_status === 'partial' ? 'partial' : 'unavailable', mixedMarketState: q.mixedMarketState === true, unsupportedWeight: ratio(unsupported) };
+  const unsupported = typeof q.unsupportedWeight === 'string' && dec(q.unsupportedWeight) ? q.unsupportedWeight : '1';
+  return { freshness: snapshot.freshness === 'fresh' || snapshot.freshness === 'stale' ? snapshot.freshness : 'unknown', coverage: snapshot.coverage === 'complete' ? 'complete' : snapshot.coverage === 'partial_known_unsupported' ? 'partial' : 'unavailable', reconciliation: snapshot.reconciliation_status === 'reconciled' ? 'reconciled' : snapshot.reconciliation_status === 'partial' ? 'partial' : 'unavailable', mixedMarketState: q.mixedMarketState !== false, unsupportedWeight: ratio(unsupported) };
 }
 function context(input: Input, q: AlertQualityContext): AlertEvaluationContext { return { snapshotId: input.snapshotId, sourceAsOf: input.sourceAsOf, calculationVersion: input.calculationVersion, quality: q, observedMoney: null, observedRatio: null, baselineObservationId: null, baselineMoney: null, flowAdjustment: null, staleForSeconds: null, dataHealthFailure: q.freshness !== 'fresh' || q.coverage !== 'complete' || q.reconciliation !== 'reconciled', suspiciousOutlier: false, coherentConfirmationCount: 0 }; }
 function rule(row: Rule): FactualAlertRule {
@@ -43,16 +43,21 @@ export function createPostgresAlertEvaluator(options: { database: DatabaseClient
       if (currentRule.kind === 'data_health_failure') result.dataHealthFailure = q.freshness !== 'fresh' || q.coverage !== 'complete' || q.reconciliation !== 'reconciled';
       if (currentRule.kind === 'stale_sync') result.staleForSeconds = Number.isFinite(Date.parse(input.sourceAsOf)) ? Math.max(0, Math.floor((now().valueOf() - Date.parse(input.sourceAsOf)) / 1000)) : null;
       if (currentRule.kind === 'cash_threshold') {
-        const cash = await options.database.query<Scalar>('select sum(settled_cash) as amount from cash_observations where sync_run_id = $1', [snapshot.sync_run_id]);
+        const cash = await options.database.query<Scalar>(currentRule.scope.id ? 'select sum(settled_cash) as amount from cash_observations where sync_run_id = $1 and account_id = $2' : 'select sum(settled_cash) as amount from cash_observations where sync_run_id = $1', currentRule.scope.id ? [snapshot.sync_run_id, currentRule.scope.id] : [snapshot.sync_run_id]);
         result.observedMoney = money(dec(cash.rows[0]?.amount));
       }
-      if ((currentRule.kind === 'concentration_threshold' || currentRule.kind === 'holding_percentage_move') && currentRule.scope.id && total) {
-        const holding = await options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [snapshot.sync_run_id, currentRule.scope.id]);
+      if ((currentRule.kind === 'concentration_threshold' || currentRule.kind === 'holding_percentage_move') && total) {
+        const holding = await options.database.query<Scalar>(currentRule.scope.id ? 'select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2' : 'select max(total) as amount from (select sum(provider_market_value) as total from position_observations where sync_run_id = $1 group by security_id) eligible', currentRule.scope.id ? [snapshot.sync_run_id, currentRule.scope.id] : [snapshot.sync_run_id]);
         const value = dec(holding.rows[0]?.amount); if (value) { result.observedMoney = money(value); result.observedRatio = ratio(value.div(total).toFixed()); }
       }
       if (currentRule.kind === 'portfolio_percentage_move' || currentRule.kind === 'material_value_change') result.observedMoney = money(total);
       if (baselineKinds.has(currentRule.kind) && currentRule.baseline) {
-        const history = await options.database.query<Snapshot>('select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' order by as_of desc limit 1', [input.userId, snapshot.as_of]);
+        if (currentRule.baseline === 'fixed_reference') {
+          const evaluation = evaluateAlertRule(currentRule, result);
+          await options.alerts.appendEvent({ id: randomUUID(), ruleId: evaluation.ruleId, snapshotId: input.snapshotId, fingerprint: evaluation.fingerprint, state: evaluation.state, evidence: publicAlertEvidence(evaluation) });
+          continue;
+        }
+        const history = await options.database.query<Snapshot>(currentRule.baseline === 'prior_regular_session_close' ? 'select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' and freshness = \'fresh\' order by as_of desc limit 1' : 'select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' order by as_of desc limit 1', [input.userId, snapshot.as_of]);
         const prior = history.rows[0];
         if (prior) {
           let current = currentRule.kind === 'holding_percentage_move' ? null : total, baseline = currentRule.kind === 'holding_percentage_move' ? null : dec(prior.total_value);
@@ -60,7 +65,8 @@ export function createPostgresAlertEvaluator(options: { database: DatabaseClient
             const [a, b] = await Promise.all([options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [snapshot.sync_run_id, currentRule.scope.id]), options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [prior.sync_run_id, currentRule.scope.id])]);
             current = dec(a.rows[0]?.amount); baseline = dec(b.rows[0]?.amount);
           }
-          const flows = await options.database.query<Scalar>('select sum(amount) as amount from transactions where user_id = $1 and effective_at > $2 and effective_at <= $3 and kind in (\'deposit\', \'withdrawal\', \'internal_transfer\')', [input.userId, prior.as_of, snapshot.as_of]);
+          if (currentRule.kind === 'holding_percentage_move') { current = null; baseline = null; }
+          const flows = await options.database.query<Scalar>('select sum(amount) as amount from transactions where user_id = $1 and effective_at > $2 and effective_at <= $3 and kind in (\'deposit\', \'withdrawal\')', [input.userId, prior.as_of, snapshot.as_of]);
           const flow = dec(flows.rows[0]?.amount) ?? new Decimal(0);
           if (current && baseline) { result.baselineObservationId = prior.id; result.flowAdjustment = money(flow); result.baselineMoney = money(baseline.plus(flow)); result.observedMoney = money(current); if (currentRule.kind !== 'material_value_change' && !baseline.isZero()) result.observedRatio = ratio(current.minus(baseline).minus(flow).div(baseline.abs()).toFixed()); }
         }

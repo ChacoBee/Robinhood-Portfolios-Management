@@ -5,7 +5,7 @@ describe('PostgreSQL promoted-snapshot alert evaluator', () => {
   it('evaluates durable owner rules and persists evidence for the promoted snapshot', async () => {
     const appendEvent = vi.fn();
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-1', sync_run_id: 'run-1', total_value: '100', as_of: '2026-08-26T12:00:00.000Z', coverage: 'complete', freshness: 'fresh', reconciliation_status: 'reconciled', payload: {} }] })
+      .mockResolvedValueOnce({ rows: [{ id: 'snapshot-1', sync_run_id: 'run-1', total_value: '100', as_of: '2026-08-26T12:00:00.000Z', coverage: 'complete', freshness: 'fresh', reconciliation_status: 'reconciled', payload: { quality: { mixedMarketState: false, unsupportedWeight: '0' } } }] })
       .mockResolvedValueOnce({ rows: [{ id: 'rule-1', kind: 'cash_threshold', enabled: true, threshold: { value: '150', scopeId: null }, baseline: null, cooldown_seconds: 300, daily_cap: 1 }] });
     query.mockResolvedValueOnce({ rows: [{ amount: '100' }] });
     const evaluate = createPostgresAlertEvaluator({ database: { query } as never, alerts: { appendEvent } });
@@ -18,7 +18,7 @@ describe('PostgreSQL promoted-snapshot alert evaluator', () => {
   it('uses factual durable inputs for every supported rule kind', async () => {
     const appendEvent = vi.fn();
     const kinds = ['data_health_failure', 'stale_sync', 'portfolio_percentage_move', 'holding_percentage_move', 'concentration_threshold', 'cash_threshold', 'material_value_change'];
-    const snapshot = { id: 'snapshot-1', sync_run_id: 'run-1', total_value: '120', as_of: '2026-08-26T12:00:00.000Z', coverage: 'complete', freshness: 'fresh', reconciliation_status: 'reconciled', payload: {} };
+    const snapshot = { id: 'snapshot-1', sync_run_id: 'run-1', total_value: '120', as_of: '2026-08-26T12:00:00.000Z', coverage: 'complete', freshness: 'fresh', reconciliation_status: 'reconciled', payload: { quality: { mixedMarketState: false, unsupportedWeight: '0' } } };
     const prior = { ...snapshot, id: 'snapshot-0', sync_run_id: 'run-0', total_value: '100', as_of: '2026-08-25T12:00:00.000Z' };
     const query = vi.fn(async (sql: string) => {
       if (sql.includes('where id = $1')) return { rows: [snapshot] };

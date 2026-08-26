@@ -60,18 +60,19 @@ export async function startWorker(
     throw new Error('alert_evaluation_composition_required');
   }
 
-  const vault = new AesGcmAccountReferenceVault(
-    config.ACCOUNT_REFERENCE_ENCRYPTION_KEY,
-  );
-  const transport = new SdkMcpTransport({
-    endpoint: resolvedComposition.endpoint,
-    approvedEndpointOrigins: resolvedComposition.approvedEndpointOrigins,
-    authProvider: resolvedComposition.authProvider,
-  });
-  const database = resolvedComposition.resources?.database ?? createPostgresClient(config.DATABASE_URL);
-  const repositories = createRepositories(database, {
-    providerIdentifierKeyer: vault,
-  });
+  let vault: AesGcmAccountReferenceVault;
+  let transport: SdkMcpTransport;
+  let database: DatabaseClient;
+  let repositories: ReturnType<typeof createRepositories>;
+  try {
+    vault = new AesGcmAccountReferenceVault(config.ACCOUNT_REFERENCE_ENCRYPTION_KEY);
+    transport = new SdkMcpTransport({ endpoint: resolvedComposition.endpoint, approvedEndpointOrigins: resolvedComposition.approvedEndpointOrigins, authProvider: resolvedComposition.authProvider });
+    database = resolvedComposition.resources?.database ?? createPostgresClient(config.DATABASE_URL);
+    repositories = createRepositories(database, { providerIdentifierKeyer: vault });
+  } catch (error) {
+    await resolvedComposition.resources?.close();
+    throw error;
+  }
   try {
     if (!resolvedComposition.ownerId) await bootstrapConfiguredOwner(repositories.portfolios, {
       clerkUserId: config.OWNER_CLERK_USER_ID,

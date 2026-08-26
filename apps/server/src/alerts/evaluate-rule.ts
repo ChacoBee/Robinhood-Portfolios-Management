@@ -109,7 +109,7 @@ export function evaluateAlertRule(
   const needsMoney = rule.kind === 'cash_threshold' || rule.kind === 'material_value_change';
   const needsRatio = rule.kind === 'portfolio_percentage_move' || rule.kind === 'holding_percentage_move' || rule.kind === 'concentration_threshold';
   const needsBaseline = rule.kind === 'portfolio_percentage_move' || rule.kind === 'holding_percentage_move' || rule.kind === 'material_value_change';
-  if ((needsMoney && context.observedMoney === null) || (needsRatio && context.observedRatio === null) || (needsBaseline && context.baselineMoney === null)) {
+  if ((needsMoney && context.observedMoney === null) || (needsRatio && context.observedRatio === null) || (needsBaseline && context.baselineMoney === null) || (rule.kind === 'stale_sync' && context.staleForSeconds === null)) {
     return result(rule, context, 'suppressed', 'Required factual evidence is unavailable');
   }
   if (!thresholdBreached(rule, context)) {
