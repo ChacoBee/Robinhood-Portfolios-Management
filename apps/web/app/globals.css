@@ -2852,7 +2852,6 @@ th.numeric,
   .source-notice { gap: 10px; padding: 12px; }
   .source-notice p { max-width: 180px; }
   .source-meta strong { font-size: 0.6rem; }
-  .page-heading h1 { font-size: 2.25rem; }
   .data-card { padding: 19px; }
   .activity-list li { grid-template-columns: 36px minmax(0, 1fr); gap: 11px; }
   .activity-icon { width: 34px; height: 34px; }

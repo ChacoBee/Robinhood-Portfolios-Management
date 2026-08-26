@@ -86,6 +86,21 @@ test.describe('Aurum dashboard', () => {
     }
   });
 
+  test('narrow phones keep ordinary page headings compact while retaining the primary portfolio value hierarchy', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoPage(page, '/accounts');
+
+    const headingSize = await page.locator('.page-heading h1').evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    expect(headingSize).toBeLessThanOrEqual(32);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+
+    await page.getByRole('link', { name: 'Dashboard' }).click();
+    await expect(page.getByRole('heading', { name: 'Portfolio value' })).toBeVisible();
+    const primaryValueSize = await page.locator('.hero-value').evaluate((element) => Number.parseFloat(getComputedStyle(element).fontSize));
+    expect(primaryValueSize).toBeGreaterThan(headingSize);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+  });
+
   test('accounts use the shared neutral financial surface contract', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await gotoPage(page, '/accounts');
@@ -126,6 +141,29 @@ test.describe('Aurum dashboard', () => {
     await gotoPage(page, '/settings');
     await expect(shellStatus).toContainText('Source unavailable');
     await expect(shellStatus).toContainText('Freshness unavailable');
+  });
+
+  test('persistent header clears or replaces source observations during client-side navigation', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoPage(page, '/');
+
+    const shellStatus = page.getByRole('status', { name: 'Shell data source status' });
+    await expect(shellStatus).toContainText('Synthetic Demo');
+    await expect(shellStatus).toContainText('fresh');
+
+    await page.getByRole('link', { name: 'Allocation' }).click();
+    await expect(page).toHaveURL(/\/analytics$/);
+    await expect(shellStatus).toContainText('Synthetic Demo');
+    await expect(shellStatus).toContainText('fresh');
+    await expect(shellStatus).toContainText('Timestamp unavailable');
+    await expect(shellStatus).not.toContainText('Aug 25, 2026, 10:14 AM ET');
+
+    await page.getByRole('link', { name: 'Settings' }).click();
+    await expect(page).toHaveURL(/\/settings$/);
+    await expect(shellStatus).toContainText('Source unavailable');
+    await expect(shellStatus).toContainText('Freshness unavailable');
+    await expect(shellStatus).not.toContainText('Synthetic Demo');
+    await expect(shellStatus).not.toContainText('Aug 25, 2026, 10:14 AM ET');
   });
 
   test('shell focus remains visible and reduced motion disables transitions', async ({ page }) => {
