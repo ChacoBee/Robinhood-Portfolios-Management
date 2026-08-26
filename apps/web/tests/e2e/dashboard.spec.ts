@@ -16,6 +16,19 @@ const routes = [
   '/settings',
 ] as const;
 
+const routesWithObservedSource = new Set<string>([
+  '/',
+  '/accounts',
+  '/accounts/acct-synth-individual',
+  '/holdings',
+  '/holdings/inst-synth-1',
+  '/performance?range=YTD',
+  '/analytics',
+  '/activity',
+  '/activity/reconciliation',
+  '/alerts',
+]);
+
 async function gotoPage(page: Page, route: string) {
   const response = await page.goto(route);
   expect(response?.ok()).toBe(true);
@@ -45,6 +58,74 @@ test.describe('Aurum dashboard', () => {
     await expect(page.locator('.side-rail')).toHaveCSS('width', '208px');
     await expect(page.locator('.global-header')).toHaveCSS('min-height', '68px');
     expect((await page.locator('.global-header').boundingBox())?.height).toBe(68);
+  });
+
+  test('content uses the full frame with capped gutters and compact ordinary headings', async ({ page }) => {
+    for (const width of [1440, 1920]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await gotoPage(page, '/accounts');
+
+      const layout = await page.locator('.dashboard-main').evaluate((element) => {
+        const style = getComputedStyle(element);
+        const rect = element.getBoundingClientRect();
+        const frameRect = document.querySelector('.app-frame')?.getBoundingClientRect();
+        const headingStyle = getComputedStyle(element.querySelector('.page-heading h1')!);
+        return {
+          frameWidth: frameRect?.width ?? 0,
+          mainWidth: rect.width,
+          paddingLeft: style.paddingLeft,
+          paddingRight: style.paddingRight,
+          headingSize: Number.parseFloat(headingStyle.fontSize),
+        };
+      });
+
+      expect(layout.mainWidth, `main width at ${width}px`).toBeCloseTo(layout.frameWidth, 0);
+      expect(layout.paddingLeft).toBe('32px');
+      expect(layout.paddingRight).toBe('32px');
+      expect(layout.headingSize).toBeLessThanOrEqual(32);
+    }
+  });
+
+  test('accounts use the shared neutral financial surface contract', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await gotoPage(page, '/accounts');
+
+    const account = page.locator('.account-card').first();
+    await expect(account).toHaveCSS('background-color', 'rgb(18, 21, 26)');
+    await expect(account).toHaveCSS('background-image', 'none');
+    await expect(account).toHaveCSS('border-radius', '12px');
+    await expect(account).toHaveCSS('border-top-color', 'rgb(37, 43, 53)');
+    await expect(account).toHaveCSS('box-shadow', 'none');
+    await account.hover();
+    await expect(account).toHaveCSS('transform', 'none');
+    await expect(account).toHaveCSS('box-shadow', 'none');
+  });
+
+  test('desktop navigation links retain 44px touch targets', async ({ page }) => {
+    for (const width of [1024, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await gotoPage(page, '/');
+      await expect(page.locator('.side-rail')).toBeVisible();
+      const heights = await page.locator('.side-rail .nav-link').evaluateAll((links) =>
+        links.map((link) => link.getBoundingClientRect().height),
+      );
+      expect(heights.every((height) => height >= 44), `nav targets at ${width}px`).toBe(true);
+    }
+  });
+
+  test('persistent header reports observed freshness and explicit unavailable state', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoPage(page, '/');
+
+    const shellStatus = page.getByRole('status', { name: 'Shell data source status' });
+    await expect(shellStatus).toContainText('Synthetic Demo');
+    await expect(shellStatus).toContainText('fresh');
+    await expect(shellStatus).toContainText('Aug 25, 2026, 10:14 AM ET');
+    await expect(page.getByRole('region', { name: 'Data source and quality' })).toBeVisible();
+
+    await gotoPage(page, '/settings');
+    await expect(shellStatus).toContainText('Source unavailable');
+    await expect(shellStatus).toContainText('Freshness unavailable');
   });
 
   test('shell focus remains visible and reduced motion disables transitions', async ({ page }) => {
@@ -90,15 +171,20 @@ test.describe('Aurum dashboard', () => {
   });
 
   for (const route of routes) {
-    test(`${route} renders a labeled synthetic source`, async ({ page }) => {
+    test(`${route} renders an accurate shell source state`, async ({ page }) => {
       await gotoPage(page, route);
-      await expect(page.getByText('Synthetic Demo').first()).toBeVisible();
+      const shellStatus = page.getByRole('status', { name: 'Shell data source status' });
+      if (routesWithObservedSource.has(route)) {
+        await expect(shellStatus).toContainText('Synthetic Demo');
+      } else {
+        await expect(shellStatus).toContainText('Source unavailable');
+      }
       const scan = await new AxeBuilder({ page }).analyze();
       expect(scan.violations.filter((item) => ['serious', 'critical'].includes(item.impact ?? ''))).toEqual([]);
     });
   }
 
-  test('mobile navigation exposes four direct destinations and the exact More menu', async ({ page }) => {
+  test('mobile navigation uses a native More disclosure with natural keyboard order', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
     await gotoPage(page, '/holdings');
 
@@ -108,13 +194,68 @@ test.describe('Aurum dashboard', () => {
     await expect(navigation.getByRole('link', { name: 'Holdings' })).toHaveAttribute('aria-current', 'page');
     await expect(navigation.getByRole('link', { name: 'Activity' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Alerts' })).toBeVisible();
-    await navigation.getByRole('button', { name: 'More navigation' }).click();
-    await expect(page.getByRole('menuitem').allTextContents()).resolves.toEqual([
+    const trigger = navigation.getByRole('button', { name: 'More navigation' });
+    await expect(trigger).not.toHaveAttribute('aria-haspopup');
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await expect(trigger).toHaveAttribute('aria-expanded', 'true');
+    const disclosure = page.getByLabel('More pages');
+    await expect(disclosure).toBeVisible();
+    await expect(disclosure.getByRole('link').allTextContents()).resolves.toEqual([
       'Accounts',
       'Performance',
       'Allocation',
       'Settings',
     ]);
+    await expect(page.getByRole('menu')).toHaveCount(0);
+
+    const firstLink = disclosure.getByRole('link', { name: 'Accounts' });
+    expect(await trigger.evaluate((button, link) => Boolean(button.compareDocumentPosition(link as Node) & Node.DOCUMENT_POSITION_FOLLOWING), await firstLink.elementHandle())).toBe(true);
+    await page.keyboard.press('Tab');
+    await expect(firstLink).toBeFocused();
+    await page.keyboard.press('Escape');
+    await expect(disclosure).toBeHidden();
+    await expect(trigger).toBeFocused();
+
+    await trigger.click();
+    const menuStyles = await disclosure.evaluate((element) => {
+      const style = getComputedStyle(element);
+      const firstDisclosureLink = element.querySelector('a');
+      return {
+        backgroundColor: style.backgroundColor,
+        borderRadius: style.borderRadius,
+        boxShadow: style.boxShadow,
+        linkGap: firstDisclosureLink ? getComputedStyle(firstDisclosureLink).columnGap : '',
+      };
+    });
+    expect(menuStyles).toEqual({
+      backgroundColor: 'rgb(23, 27, 34)',
+      borderRadius: '10px',
+      boxShadow: 'rgba(0, 0, 0, 0.24) 0px 8px 20px 0px',
+      linkGap: '8px',
+    });
+    await page.locator('.header-title').click();
+    await expect(disclosure).toBeHidden();
+  });
+
+  test('narrow mobile keeps a visible compact source and freshness status without overflow', async ({ page }) => {
+    await page.setViewportSize({ width: 360, height: 800 });
+    await gotoPage(page, '/');
+
+    const shellStatus = page.getByRole('status', { name: 'Shell data source status' });
+    await expect(shellStatus).toBeVisible();
+    await expect(shellStatus).toContainText('Synthetic Demo');
+    await expect(shellStatus).toContainText('fresh');
+    const bounds = await shellStatus.boundingBox();
+    expect(bounds).not.toBeNull();
+    expect(bounds!.x).toBeGreaterThanOrEqual(0);
+    expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(360);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
+
+    await gotoPage(page, '/settings');
+    await expect(shellStatus).toContainText('Source unavailable');
+    await expect(shellStatus).toContainText('Freshness unavailable');
+    expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(1);
   });
 
   test('mobile shell keeps primary controls reachable and hides the desktop rail', async ({ page }) => {

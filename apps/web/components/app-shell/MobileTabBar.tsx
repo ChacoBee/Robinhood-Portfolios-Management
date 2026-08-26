@@ -52,26 +52,9 @@ export function MobileTabBar() {
         </Link>
       ))}
       <div className="mobile-more" ref={containerRef}>
-        {open ? (
-          <div aria-label="More pages" className="mobile-more-menu" role="menu">
-            {moreTabs.map((item) => (
-              <Link
-                aria-current={pathIsActive(pathname, item.href) ? 'page' : undefined}
-                href={item.href}
-                key={item.href}
-                onClick={() => setOpen(false)}
-                role="menuitem"
-              >
-                <NavigationIcon name={item.icon} />
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        ) : null}
         <button
           aria-current={moreActive ? 'page' : undefined}
           aria-expanded={open}
-          aria-haspopup="menu"
           aria-label="More navigation"
           className="mobile-tab"
           disabled={!ready}
@@ -82,6 +65,21 @@ export function MobileTabBar() {
           <span aria-hidden="true">•••</span>
           <small>More</small>
         </button>
+        {open ? (
+          <div aria-label="More pages" className="mobile-more-menu">
+            {moreTabs.map((item) => (
+              <Link
+                aria-current={pathIsActive(pathname, item.href) ? 'page' : undefined}
+                href={item.href}
+                key={item.href}
+                onClick={() => setOpen(false)}
+              >
+                <NavigationIcon name={item.icon} />
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
     </nav>
   );
