@@ -753,11 +753,9 @@ a:focus-visible {
 .insight-card {
   position: relative;
   overflow: hidden;
-  padding: clamp(24px, 3vw, 34px);
-  border-color: #4c3a20;
-  background:
-    radial-gradient(circle at 100% 0, rgb(216 184 106 / 15%), transparent 15rem),
-    linear-gradient(145deg, #211a10, #14110d);
+  padding: clamp(20px, 2.5vw, 28px);
+  border-color: var(--border);
+  background: var(--panel);
 }
 
 .insight-orbit {

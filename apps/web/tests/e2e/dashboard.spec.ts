@@ -56,6 +56,8 @@ test.describe('Aurum dashboard', () => {
     await expect(hero).toHaveCSS('border-radius', '12px');
     await expect(hero).toHaveCSS('border-top-color', 'rgb(37, 43, 53)');
     await expect(page.locator('.hero-context')).toHaveCSS('color', 'rgb(127, 135, 146)');
+    await expect(page.locator('.insight-card')).toHaveCSS('background-color', 'rgb(18, 21, 26)');
+    await expect(page.locator('.insight-card')).toHaveCSS('border-top-color', 'rgb(37, 43, 53)');
 
     await gotoPage(page, '/holdings');
     await expect(page.locator('.data-card')).toHaveCSS('background-color', 'rgb(18, 21, 26)');
