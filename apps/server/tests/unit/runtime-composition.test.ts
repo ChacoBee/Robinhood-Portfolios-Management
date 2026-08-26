@@ -118,7 +118,7 @@ describe('trusted runtime composition loader', () => {
       resources: { database: { close: vi.fn() } as never, close: vi.fn() },
       repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
       ownerId: '11111111-1111-5111-8111-111111111111',
-      createStore: (_credentials, ownerId) => ({ ownerId, load: vi.fn().mockResolvedValue({ connectionState: 'connected', tokens: { token: 'synthetic' } }), markHeartbeat }),
+      createStore: (_credentials, ownerId) => ({ ownerId, load: vi.fn().mockResolvedValue({ connectionState: 'connected', clientInformation: { client_id: 'synthetic-client' }, tokens: { refresh_token: 'synthetic-refresh' } }), markHeartbeat }),
       evaluateAlerts,
     });
     expect(composition.endpoint).toBe('https://agent.robinhood.com/mcp/trading');
@@ -136,7 +136,7 @@ describe('trusted runtime composition loader', () => {
       resources: { database: { close: vi.fn() } as never, close: vi.fn() },
       repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
       ownerId: '11111111-1111-5111-8111-111111111111',
-      createStore: () => ({ load: vi.fn().mockResolvedValue({ connectionState: 'connected', tokens: { token: 'synthetic' } }), markHeartbeat }),
+      createStore: () => ({ load: vi.fn().mockResolvedValue({ connectionState: 'connected', clientInformation: { client_id: 'synthetic-client' }, tokens: { refresh_token: 'synthetic-refresh' } }), markHeartbeat }),
       evaluateAlerts: async () => { throw new Error('alert_evaluation_failed'); },
     });
     await expect(composition.afterSnapshotPromoted({ userId: 'owner', snapshotId: 'snapshot', sourceAsOf: '2026-08-26T12:00:00.000Z', calculationVersion: 'v1' })).rejects.toThrow('alert_evaluation_failed');
