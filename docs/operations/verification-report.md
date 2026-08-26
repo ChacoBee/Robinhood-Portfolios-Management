@@ -25,28 +25,34 @@ of a generic MCP proxy; tools outside this list are not called.
 
 ## Fresh checks
 
-| Check | Result |
-| --- | --- |
-| `npm audit --omit=dev` | Passed: 0 vulnerabilities |
-| `npm run lint` | Passed for server, web, and domain workspaces |
-| `npm run typecheck` | Passed for server, web, and domain workspaces |
-| Focused live adapter tests | 18 contract/snapshot/refresh tests passed |
-| `npm run build` | Server TypeScript and web production builds passed |
-| `npm run test:e2e` | 18 Chromium tests passed on clean retry |
-| `npm run db:check --workspace @aurum/server` | Drizzle schema check passed |
-| Reachable-history Gitleaks | 46 commits scanned with redaction; no leaks found |
+| UTC | Check | Result |
+| --- | --- | --- |
+| `2026-08-26T14:14:09Z` | Focused enrollment-gate tests | 15 unit/Compose tests passed. |
+| `2026-08-26T14:14:36Z` | `npm test` | Passed: 67 files / 335 tests. |
+| `2026-08-26T14:15:13Z` | `npm audit --omit=dev` | Passed: 0 vulnerabilities. |
+| `2026-08-26T14:15:14Z` | `npm audit` | Non-zero by design: 4 moderate dev-toolchain advisories through `drizzle-kit` and its legacy esbuild loader; the available remediation is a breaking `drizzle-kit` downgrade. |
+| `2026-08-26T14:15:29Z` | `npm run lint` | Passed for server, web, and domain workspaces. |
+| `2026-08-26T14:15:39Z` | `npm run typecheck` | Passed for server, web, and domain workspaces. |
+| `2026-08-26T14:16:22Z` | `npm run build` | Server TypeScript and web production builds passed. |
+| `2026-08-26T14:16:30Z` | `npm run db:check --workspace @aurum/server` | Drizzle schema check passed. |
+| `2026-08-26T14:19:05Z` | Reachable-history Gitleaks | 50 branch-history commits scanned with redaction; no leaks found. |
+| `2026-08-26T14:17:13Z` | Quiet Compose preflight | Passed with the ignored operator supplement; no Compose values were rendered. |
 
-`5f13f14` adds a reviewed `.gitleaks.toml` that extends the default rules and
-allows only two false-positive rule IDs in specific synthetic test paths. It
-does not globally disable secret detection.
+`5f13f14` and this final scan adjustment keep `.gitleaks.toml` extending the
+default rules. The narrow rule-and-path allowlists cover only reviewed synthetic
+fixtures; the `generic-api-key` exception now includes the same synthetic
+`connect-cli` test path already covered for its distinct token rule. No rule is
+globally disabled.
+
+`8706d02` adds the fail-closed one-shot enrollment gate: Compose waits for it
+before worker startup, and the worker repeats encrypted connected-grant
+verification before transport, scheduler, or job-loop construction.
 
 ## Remaining concern
 
-The full Vitest suite intermittently times out in the Compose integration test
-when tests run in parallel. In the completion pass, 65 files / 329 tests passed
-before that one timeout; the same Compose test passed in isolation. This report
-does not treat the full-suite result as clean until that timing issue is
-stabilized.
+The earlier parallel Compose-test timeout did not recur in the fresh full suite.
+The current report records that successful run rather than claiming the full
+dependency audit is clean; the dev-toolchain moderate advisories above remain.
 
 ## Data truth boundary
 

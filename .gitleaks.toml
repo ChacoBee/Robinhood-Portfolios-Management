@@ -9,7 +9,7 @@ id = "generic-api-key"
 [rules.allowlist]
 description = "Synthetic connected-runtime key fixtures"
 paths = [
-  '''^apps/server/tests/integration/(api-read-routes|auth-routes|connected-read-model|docker-compose)\.test\.ts$''',
+  '''^apps/server/tests/integration/(api-read-routes|auth-routes|connect-cli|connected-read-model|docker-compose)\.test\.ts$''',
   '''^apps/server/tests/unit/(api-composition|config|runtime-composition|worker)\.test\.ts$''',
 ]
 
