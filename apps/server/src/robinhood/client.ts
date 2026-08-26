@@ -49,6 +49,25 @@ function requireRows<T>(rows: readonly (T | null)[]): readonly T[] {
   return rows as readonly T[];
 }
 
+function rowsOrEmpty<T>(rows: readonly (T | null)[] | null): readonly (T | null)[] {
+  return rows ?? [];
+}
+
+function cursorFromNext(next: string | undefined): string | null {
+  if (next === undefined) return null;
+  let url: URL;
+  try {
+    url = new URL(next);
+  } catch {
+    throw new ProviderBoundaryError('provider_schema_drift');
+  }
+  const values = url.searchParams.getAll('cursor');
+  if (values.length !== 1 || values[0]!.length === 0) {
+    throw new ProviderBoundaryError('provider_schema_drift');
+  }
+  return values[0]!;
+}
+
 export class RobinhoodReadClient {
   private readonly now: () => Date;
 
@@ -74,20 +93,26 @@ export class RobinhoodReadClient {
       const raw: unknown = await this.transport.call(tool, {
         account_number: accountNumber, ...(cursor ? { cursor } : {}), ...(nonzero ? { nonzero } : {}),
       });
-      const page: { results: Array<ProviderEquityPosition | ProviderOptionPosition | null>; next: string | null } = tool === 'get_equity_positions'
+      const page = tool === 'get_equity_positions'
         ? parseProvider(ProviderEquityPositionsResponseSchema, raw)
         : parseProvider(ProviderOptionPositionsResponseSchema, raw);
-      rows.push(...requireRows(page.results));
-      if (page.next && cursors.has(page.next)) throw new ProviderBoundaryError('provider_schema_drift');
-      if (page.next) cursors.add(page.next);
-      cursor = page.next;
+      const pageRows = tool === 'get_equity_positions'
+        ? requireRows(rowsOrEmpty(page.positions as readonly (ProviderEquityPosition | null)[] | null))
+        : requireRows(rowsOrEmpty(page.positions as readonly (ProviderOptionPosition | null)[] | null));
+      rows.push(...pageRows);
+      const nextCursor = cursorFromNext(page.next);
+      if (nextCursor && cursors.has(nextCursor)) throw new ProviderBoundaryError('provider_schema_drift');
+      if (nextCursor) cursors.add(nextCursor);
+      cursor = nextCursor;
     } while (cursor);
     return rows;
   }
 
   async readAccounts(): Promise<readonly AccountObservation[]> {
     const raw = await this.transport.call<unknown>('get_accounts', {});
-    const accounts = requireRows(parseProvider(ProviderAccountsResponseSchema, raw).results);
+    const accounts = rowsOrEmpty(parseProvider(ProviderAccountsResponseSchema, raw).accounts).filter(
+      (account): account is NonNullable<typeof account> => account !== null,
+    );
     assertUnique(accounts.map((account) => account.account_number));
     const receivedAt = this.receivedAt();
     return accounts.map((account) => mapAccount(account, this.vault, receivedAt));
@@ -113,7 +138,7 @@ export class RobinhoodReadClient {
     const quotes: EquityQuoteObservation[] = [];
     for (const symbolsBatch of batch(symbols)) {
       const raw = await this.transport.call<unknown>('get_equity_quotes', { symbols: symbolsBatch });
-      const results = requireRows(parseProvider(ProviderQuotesResponseSchema, raw).results);
+      const results = requireRows(rowsOrEmpty(parseProvider(ProviderQuotesResponseSchema, raw).results));
       quotes.push(...results.map(mapQuote));
     }
     assertUnique(quotes.map((quote) => quote.symbol));
@@ -133,11 +158,10 @@ export class RobinhoodReadClient {
   async readOptionQuotes(optionIds: readonly string[]): Promise<readonly OptionQuoteObservation[]> {
     assertUnique(optionIds); const results: OptionQuoteObservation[] = [];
     for (const optionIdsBatch of batch(optionIds)) {
-      const raw = await this.transport.call<unknown>('get_option_quotes', { option_ids: optionIdsBatch });
-      const page = requireRows(parseProvider(ProviderOptionQuotesResponseSchema, raw).results);
+      const raw = await this.transport.call<unknown>('get_option_quotes', { instrument_ids: optionIdsBatch });
+      const page = requireRows(rowsOrEmpty(parseProvider(ProviderOptionQuotesResponseSchema, raw).results));
       for (const row of page) {
-        if (row.quote.mark_price === null || row.quote.currency !== 'USD') throw new ProviderBoundaryError('provider_schema_drift');
-        results.push({ optionId: row.option_id, markPrice: row.quote.mark_price, currency: row.quote.currency, sourceAsOf: this.receivedAt() });
+        results.push({ optionId: row.quote.instrument_id, markPrice: row.quote.mark_price, currency: 'USD', sourceAsOf: row.quote.updated_at ?? this.receivedAt() });
       }
     }
     assertUnique(results.map((row) => row.optionId));
@@ -148,11 +172,10 @@ export class RobinhoodReadClient {
   async readOptionInstruments(optionIds: readonly string[]): Promise<readonly OptionInstrumentObservation[]> {
     assertUnique(optionIds); const results: OptionInstrumentObservation[] = [];
     for (const optionIdsBatch of batch(optionIds)) {
-      const raw = await this.transport.call<unknown>('get_option_instruments', { option_ids: optionIdsBatch });
-      const page = requireRows(parseProvider(ProviderOptionInstrumentsResponseSchema, raw).results);
+      const raw = await this.transport.call<unknown>('get_option_instruments', { ids: optionIdsBatch.join(',') });
+      const page = requireRows(rowsOrEmpty(parseProvider(ProviderOptionInstrumentsResponseSchema, raw).instruments));
       for (const row of page) {
-        if (row.trade_value_multiplier === null || row.currency !== 'USD') throw new ProviderBoundaryError('provider_schema_drift');
-        results.push({ optionId: row.option_id, tradeValueMultiplier: row.trade_value_multiplier, currency: row.currency });
+        results.push({ optionId: row.id, tradeValueMultiplier: row.trade_value_multiplier, currency: 'USD' });
       }
     }
     assertUnique(results.map((row) => row.optionId));

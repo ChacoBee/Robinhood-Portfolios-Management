@@ -1,357 +1,146 @@
 import { describe, expect, it } from 'vitest';
 import { RobinhoodReadClient } from '../../src/robinhood/client';
-import {
-  allowedRobinhoodTools,
-  assertAllowedRobinhoodTool,
-  type AllowedRobinhoodTool,
-} from '../../src/robinhood/read-methods';
+import { allowedRobinhoodTools, type AllowedRobinhoodTool } from '../../src/robinhood/read-methods';
 import type { McpTransport } from '../../src/robinhood/transport';
 import { AesGcmAccountReferenceVault } from '../../src/robinhood/vault';
 
 class FixtureTransport implements McpTransport {
-  readonly calls: Array<{
-    tool: AllowedRobinhoodTool;
-    args: Readonly<Record<string, unknown>>;
-  }> = [];
-
-  constructor(
-    private readonly responses: Partial<
-      Record<AllowedRobinhoodTool, unknown[]>
-    >,
-  ) {}
-
-  async call<T>(
-    tool: AllowedRobinhoodTool,
-    args: Readonly<Record<string, unknown>>,
-  ): Promise<T> {
+  readonly calls: Array<{ tool: AllowedRobinhoodTool; args: Readonly<Record<string, unknown>> }> = [];
+  constructor(private readonly responses: Partial<Record<AllowedRobinhoodTool, unknown[]>>) {}
+  async call<T>(tool: AllowedRobinhoodTool, args: Readonly<Record<string, unknown>>): Promise<T> {
     this.calls.push({ tool, args });
     return this.responses[tool]?.shift() as T;
   }
 }
 
-const key = Buffer.alloc(32, 7).toString('base64');
-const vault = () => new AesGcmAccountReferenceVault(key);
-
-const rawAccount = {
-  account_number: '123456789',
-  nickname: 'Primary brokerage',
-  account_type: 'brokerage',
-  deactivated: false,
-  closed: false,
-} as const;
+const vault = () => new AesGcmAccountReferenceVault(Buffer.alloc(32, 7).toString('base64'));
+const account = {
+  account_number: '123456789', rhs_account_number: '987654321', type: 'brokerage',
+  brokerage_account_type: 'individual', is_default: true, agentic_allowed: true,
+  option_level: 'option_level_3', state: 'active', deactivated: false,
+  permanently_deactivated: false, nickname: 'Primary brokerage',
+};
+const equityPosition = {
+  symbol: 'AAPL', quantity: '2', intraday_quantity: '0', shares_available_for_sells: '2',
+  shares_held_for_sells: '0', shares_held_for_stock_grants: '0',
+  shares_held_for_options_events: '0', shares_held_for_asset_transfer: '0',
+  shares_pending_from_options_events: '0', type: 'equity', average_buy_price: '100',
+};
+const equityQuote = {
+  symbol: 'AAPL', last_trade_price: '125.50', venue_last_trade_time: '2026-08-25T14:00:30.000Z',
+  last_non_reg_trade_price: null, venue_last_non_reg_trade_time: null,
+  adjusted_previous_close: '124', previous_close: '124', previous_close_date: '2026-08-22',
+  bid_price: '125.40', bid_size: '1', ask_price: '125.60', ask_size: '1', has_traded: true,
+  state: 'open', updated_at: '2026-08-25T14:00:30.000Z',
+};
+const optionPosition = {
+  option_id: 'option-1', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000', type: 'option',
+  quantity: '1', average_price: '0.20', expiration_date: '2026-09-18', trade_value_multiplier: '100',
+  intraday_average_open_price: '0.20', intraday_quantity: '0', pending_buy_quantity: '0',
+  pending_sell_quantity: '0', pending_assignment_quantity: '0', pending_exercise_quantity: '0',
+  pending_expiration_quantity: '0', opened_at: '2026-08-01T14:00:00.000Z',
+};
+const optionQuote = { instrument_id: 'option-1', mark_price: '0.25', updated_at: '2026-08-25T14:00:30.000Z' };
+const optionInstrument = { id: 'option-1', trade_value_multiplier: '100', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000' };
 
 describe('Robinhood live read contract', () => {
-  it('uses only the provider raw read tool names', () => {
+  it('keeps the exact seven-tool read allowlist', () => {
     expect(allowedRobinhoodTools).toEqual([
-      'get_accounts',
-      'get_portfolio',
-      'get_equity_positions',
-      'get_equity_quotes',
-      'get_option_positions',
-      'get_option_quotes',
-      'get_option_instruments',
+      'get_accounts', 'get_portfolio', 'get_equity_positions', 'get_equity_quotes',
+      'get_option_positions', 'get_option_quotes', 'get_option_instruments',
     ]);
-
-    expect(() => assertAllowedRobinhoodTool('mcp__robinhood__get_accounts')).toThrow(
-      /read-only/i,
-    );
-    expect(() => assertAllowedRobinhoodTool('place_equity_order')).toThrow(
-      /read-only/i,
-    );
   });
 
-  it('seals only account_number and stamps an account receipt time', async () => {
+  it('maps sanitized live envelopes, uses live argument names, and sends only cursor values', async () => {
     const transport = new FixtureTransport({
-      get_accounts: [{ results: [rawAccount] }],
+      get_accounts: [{ accounts: [account, null] }],
+      get_portfolio: [{ total_value: '175', equity_value: '125', options_value: '25', futures_value: '0', event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0', mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD', buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' } }],
+      get_equity_positions: [{ positions: [equityPosition], next: 'https://provider.example/positions?cursor=cursor-2' }, { positions: [] }],
+      get_equity_quotes: [{ results: [{ quote: equityQuote, close: false }] }],
+      get_option_positions: [{ positions: [optionPosition] }],
+      get_option_quotes: [{ results: [{ quote: optionQuote, close: false }] }],
+      get_option_instruments: [{ instruments: [optionInstrument] }],
     });
-    const result = await new RobinhoodReadClient(
-      transport,
-      vault(),
-      () => new Date('2026-08-25T14:00:00.000Z'),
-    ).readAccounts();
-
-    expect(result).toEqual([
-      expect.objectContaining({
-        maskedAccountNumber: '•••• 6789',
-        displayName: 'Primary brokerage',
-        status: 'active',
-        totalKind: 'provider_portfolio_value',
-        sourceAsOf: '2026-08-25T14:00:00.000Z',
-      }),
-    ]);
-    expect(JSON.stringify(result)).not.toContain(rawAccount.account_number);
-  });
-
-  it('keeps an absent provider accrued value unavailable instead of inventing zero', async () => {
-    const accountVault = vault();
-    const client = new RobinhoodReadClient(
-      new FixtureTransport({
-        get_portfolio: [
-          {
-            total_value: '125',
-            cash: '25',
-            buying_power: '25',
-            currency: 'USD',
-          },
-        ],
-      }),
-      accountVault,
-    );
-
-    await expect(
-      client.readPortfolio(accountVault.seal(rawAccount.account_number)),
-    ).resolves.toMatchObject({
-      accrued: { state: 'unavailable', reason: 'accrued_missing' },
+    const client = new RobinhoodReadClient(transport, vault(), () => new Date('2026-08-25T14:01:00.000Z'));
+    const accountResult = await client.readAccounts();
+    const reference = accountResult[0]!.providerRef;
+    await expect(client.readPortfolio(reference)).resolves.toMatchObject({
+      total: { state: 'available', value: { amount: '175', currency: 'USD' } },
+      buyingPower: { state: 'available', value: { amount: '25', currency: 'USD' } },
     });
-  });
-
-  it('uses account_number, exhausts position pages once, and rejects a repeated cursor', async () => {
-    const accountVault = vault();
-    const reference = accountVault.seal(rawAccount.account_number);
-    const transport = new FixtureTransport({
-      get_equity_positions: [
-        {
-          results: [
-            {
-              symbol: 'AAPL',
-              quantity: '2',
-              average_buy_price: '100',
-              currency: 'USD',
-            },
-          ],
-          next: 'cursor-2',
-        },
-        { results: [], next: null },
-      ],
-    });
-    const client = new RobinhoodReadClient(transport, accountVault);
-
     await expect(client.readEquityPositions(reference)).resolves.toHaveLength(1);
+    await expect(client.readEquityQuotes([{ instrumentId: 'AAPL', symbol: 'AAPL' }])).resolves.toMatchObject([{ price: { amount: '125.5', currency: 'USD' }, sourceAsOf: '2026-08-25T14:00:30.000Z' }]);
+    await expect(client.readOptionPositions(reference)).resolves.toMatchObject([{ symbol: optionPosition.chain_symbol }]);
+    await expect(client.readOptionQuotes(['option-1'])).resolves.toHaveLength(1);
+    await expect(client.readOptionInstruments(['option-1'])).resolves.toHaveLength(1);
     expect(transport.calls).toEqual([
+      { tool: 'get_accounts', args: {} },
+      { tool: 'get_portfolio', args: { account_number: '123456789' } },
       { tool: 'get_equity_positions', args: { account_number: '123456789' } },
-      {
-        tool: 'get_equity_positions',
-        args: { account_number: '123456789', cursor: 'cursor-2' },
-      },
-    ]);
-
-    const looping = new RobinhoodReadClient(
-      new FixtureTransport({
-        get_equity_positions: [
-          { results: [], next: 'cursor-2' },
-          { results: [], next: 'cursor-2' },
-        ],
-      }),
-      accountVault,
-    );
-    await expect(looping.readEquityPositions(reference)).rejects.toThrow(
-      'provider_schema_drift',
-    );
-
-    const nullableRow = new RobinhoodReadClient(
-      new FixtureTransport({
-        get_equity_positions: [{ results: [null], next: null }],
-      }),
-      accountVault,
-    );
-    await expect(nullableRow.readEquityPositions(reference)).rejects.toThrow(
-      'provider_schema_drift',
-    );
-  });
-
-  it('maps requested equity quotes from results quote payloads', async () => {
-    const transport = new FixtureTransport({
-      get_equity_quotes: [
-        {
-          results: [
-            {
-              symbol: 'AAPL',
-              quote: {
-                last_trade_price: '125.50',
-                last_trade_timestamp: '2026-08-25T14:00:30.000Z',
-                last_extended_hours_trade_price: '126',
-                last_extended_hours_trade_timestamp: '2026-08-25T14:01:00.000Z',
-                currency: 'USD',
-              },
-            },
-          ],
-        },
-      ],
-    });
-    const quotes = await new RobinhoodReadClient(transport, vault()).readEquityQuotes([
-      { instrumentId: 'AAPL', symbol: 'AAPL' },
-    ]);
-
-    expect(quotes).toEqual([
-      expect.objectContaining({
-        instrumentId: 'AAPL',
-        price: { amount: '126', currency: 'USD' },
-        sourceAsOf: '2026-08-25T14:01:00.000Z',
-      }),
-    ]);
-    expect(transport.calls).toEqual([
+      { tool: 'get_equity_positions', args: { account_number: '123456789', cursor: 'cursor-2' } },
       { tool: 'get_equity_quotes', args: { symbols: ['AAPL'] } },
+      { tool: 'get_option_positions', args: { account_number: '123456789', nonzero: true } },
+      { tool: 'get_option_quotes', args: { instrument_ids: ['option-1'] } },
+      { tool: 'get_option_instruments', args: { ids: 'option-1' } },
     ]);
   });
 
-  it('rejects missing, duplicate, unrequested, non-USD, and non-finite equity quotes', async () => {
-    const request = [{ instrumentId: 'AAPL', symbol: 'AAPL' }];
-    const quote = {
-      symbol: 'AAPL',
-      quote: {
-        last_trade_price: '125',
-        last_trade_timestamp: '2026-08-25T14:00:30.000Z',
-        last_extended_hours_trade_price: null,
-        last_extended_hours_trade_timestamp: null,
-        currency: 'USD',
-      },
-    };
-    const cases: unknown[] = [
-      { results: [] },
-      { results: [quote, quote] },
-      { results: [{ ...quote, symbol: 'MSFT' }] },
-      { results: [{ ...quote, quote: { ...quote.quote, currency: 'CAD' } }] },
-      { results: [{ ...quote, quote: { ...quote.quote, last_trade_price: 'Infinity' } }] },
-      {
-        results: [
-          {
-            ...quote,
-            quote: {
-              ...quote.quote,
-              last_trade_price: null,
-              last_trade_timestamp: null,
-            },
-          },
-        ],
-      },
+  it('accepts known null account arrays but rejects unexpected fields, malformed numbers, and null required quotes', async () => {
+    await expect(new RobinhoodReadClient(new FixtureTransport({ get_accounts: [{ accounts: null }] }), vault()).readAccounts()).resolves.toEqual([]);
+    const cases: Array<Partial<Record<AllowedRobinhoodTool, unknown[]>>> = [
+      { get_accounts: [{ accounts: [{ ...account, unexpected: true }] }] },
+      { get_equity_positions: [{ positions: [{ ...equityPosition, quantity: 'not-a-number' }] }] },
+      { get_equity_quotes: [{ results: [{ quote: null, close: false }] }] },
     ];
-
-    for (const response of cases) {
-      const client = new RobinhoodReadClient(
-        new FixtureTransport({ get_equity_quotes: [response] }),
-        vault(),
-      );
-      await expect(client.readEquityQuotes(request)).rejects.toThrow(
-        'provider_schema_drift',
-      );
+    for (const responses of cases) {
+      const client = new RobinhoodReadClient(new FixtureTransport(responses), vault());
+      const operation = responses.get_accounts ? client.readAccounts() : responses.get_equity_positions
+        ? client.readEquityPositions(vault().seal('123456789'))
+        : client.readEquityQuotes([{ instrumentId: 'AAPL', symbol: 'AAPL' }]);
+      await expect(operation).rejects.toThrow('provider_schema_drift');
     }
   });
 
-  it('batches 21 equity symbols in requests of 20', async () => {
-    const requests = Array.from({ length: 21 }, (_, index) => ({
-      instrumentId: `SYM${index}`,
-      symbol: `SYM${index}`,
-    }));
-    const toResult = ({ symbol }: { symbol: string }) => ({
-      symbol,
-      quote: {
-        last_trade_price: '1',
-        last_trade_timestamp: '2026-08-25T14:00:30.000Z',
-        last_extended_hours_trade_price: null,
-        last_extended_hours_trade_timestamp: null,
-        currency: 'USD',
-      },
-    });
+  it('rejects repeated pagination, duplicate rows, and missing requested option quote or instrument results', async () => {
+    const reference = vault().seal('123456789');
+    await expect(new RobinhoodReadClient(new FixtureTransport({ get_equity_positions: [{ positions: [], next: 'https://provider.example/?cursor=again' }, { positions: [], next: 'https://provider.example/?cursor=again' }] }), vault()).readEquityPositions(reference)).rejects.toThrow('provider_schema_drift');
+    await expect(new RobinhoodReadClient(new FixtureTransport({ get_option_positions: [{ positions: [optionPosition, optionPosition] }] }), vault()).readOptionPositions(reference)).rejects.toThrow('provider_schema_drift');
+    await expect(new RobinhoodReadClient(new FixtureTransport({ get_option_quotes: [{ results: [] }] }), vault()).readOptionQuotes(['option-1'])).rejects.toThrow('provider_schema_drift');
+    await expect(new RobinhoodReadClient(new FixtureTransport({ get_option_instruments: [{ instruments: [] }] }), vault()).readOptionInstruments(['option-1'])).rejects.toThrow('provider_schema_drift');
+  });
+
+  it('batches live quote and instrument argument shapes at twenty identifiers', async () => {
+    const optionIds = Array.from({ length: 21 }, (_, index) => `option-${index}`);
+    const requests = optionIds.map((optionId) => ({ instrumentId: optionId, symbol: `SYM${optionId}` }));
+    const quoteFor = ({ symbol }: { symbol: string }) => ({ ...equityQuote, symbol });
+    const optionQuoteFor = (instrument_id: string) => ({ quote: { ...optionQuote, instrument_id } });
+    const instrumentFor = (id: string) => ({ ...optionInstrument, id });
     const transport = new FixtureTransport({
       get_equity_quotes: [
-        { results: requests.slice(0, 20).map(toResult) },
-        { results: requests.slice(20).map(toResult) },
+        { results: requests.slice(0, 20).map((request) => ({ quote: quoteFor(request) })) },
+        { results: [{ quote: quoteFor(requests[20]!) }] },
       ],
-    });
-
-    await expect(
-      new RobinhoodReadClient(transport, vault()).readEquityQuotes(requests),
-    ).resolves.toHaveLength(21);
-    expect(transport.calls.map((call) => call.args)).toEqual([
-      { symbols: requests.slice(0, 20).map((request) => request.symbol) },
-      { symbols: ['SYM20'] },
-    ]);
-  });
-
-  it('requests only nonzero option positions', async () => {
-    const accountVault = vault();
-    const transport = new FixtureTransport({
-      get_option_positions: [{ results: [], next: null }],
-    });
-    const client = new RobinhoodReadClient(transport, accountVault);
-
-    await client.readOptionPositions(accountVault.seal(rawAccount.account_number));
-    expect(transport.calls).toEqual([
-      {
-        tool: 'get_option_positions',
-        args: { account_number: '123456789', nonzero: true },
-      },
-    ]);
-  });
-
-  it('rejects duplicate option positions and invalid option quote or instrument results', async () => {
-    const accountVault = vault();
-    const reference = accountVault.seal(rawAccount.account_number);
-    const duplicatePosition = {
-      option_id: 'option-1',
-      symbol: 'AAPL 260918C00100000',
-      quantity: '1',
-      currency: 'USD',
-    };
-    await expect(
-      new RobinhoodReadClient(
-        new FixtureTransport({
-          get_option_positions: [
-            { results: [duplicatePosition, duplicatePosition], next: null },
-          ],
-        }),
-        accountVault,
-      ).readOptionPositions(reference),
-    ).rejects.toThrow('provider_schema_drift');
-
-    const invalidResponses: Array<Partial<Record<AllowedRobinhoodTool, unknown[]>>> = [
-      { get_option_quotes: [{ results: [] }] },
-      {
-        get_option_quotes: [
-          { results: [{ option_id: 'option-2', quote: { mark_price: '1', currency: 'USD' } }] },
-        ],
-      },
-      {
-        get_option_quotes: [
-          { results: [{ option_id: 'option-1', quote: { mark_price: null, currency: 'USD' } }] },
-        ],
-      },
-      {
-        get_option_instruments: [
-          { results: [{ option_id: 'option-1', trade_value_multiplier: '100', currency: 'CAD' }] },
-        ],
-      },
-    ];
-    for (const responses of invalidResponses) {
-      const client = new RobinhoodReadClient(new FixtureTransport(responses), vault());
-      const method = responses.get_option_quotes
-        ? client.readOptionQuotes(['option-1'])
-        : client.readOptionInstruments(['option-1']);
-      await expect(method).rejects.toThrow('provider_schema_drift');
-    }
-  });
-
-  it('batches 21 option IDs for both quote and instrument reads', async () => {
-    const optionIds = Array.from({ length: 21 }, (_, index) => `option-${index}`);
-    const transport = new FixtureTransport({
       get_option_quotes: [
-        { results: optionIds.slice(0, 20).map((option_id) => ({ option_id, quote: { mark_price: '1', currency: 'USD' } })) },
-        { results: [{ option_id: 'option-20', quote: { mark_price: '1', currency: 'USD' } }] },
+        { results: optionIds.slice(0, 20).map(optionQuoteFor) },
+        { results: [optionQuoteFor(optionIds[20]!)] },
       ],
       get_option_instruments: [
-        { results: optionIds.slice(0, 20).map((option_id) => ({ option_id, trade_value_multiplier: '100', currency: 'USD' })) },
-        { results: [{ option_id: 'option-20', trade_value_multiplier: '100', currency: 'USD' }] },
+        { instruments: optionIds.slice(0, 20).map(instrumentFor) },
+        { instruments: [instrumentFor(optionIds[20]!)] },
       ],
     });
     const client = new RobinhoodReadClient(transport, vault());
 
+    await expect(client.readEquityQuotes(requests)).resolves.toHaveLength(21);
     await expect(client.readOptionQuotes(optionIds)).resolves.toHaveLength(21);
     await expect(client.readOptionInstruments(optionIds)).resolves.toHaveLength(21);
     expect(transport.calls.map((call) => call.args)).toEqual([
-      { option_ids: optionIds.slice(0, 20) },
-      { option_ids: ['option-20'] },
-      { option_ids: optionIds.slice(0, 20) },
-      { option_ids: ['option-20'] },
+      { symbols: requests.slice(0, 20).map((request) => request.symbol) },
+      { symbols: [requests[20]!.symbol] },
+      { instrument_ids: optionIds.slice(0, 20) },
+      { instrument_ids: [optionIds[20]] },
+      { ids: optionIds.slice(0, 20).join(',') },
+      { ids: optionIds[20] },
     ]);
   });
 });

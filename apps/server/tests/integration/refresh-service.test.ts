@@ -28,13 +28,13 @@ class MutableFixtureTransport implements McpTransport {
 const vault = new AesGcmAccountReferenceVault(Buffer.alloc(32, 23).toString('base64'));
 const receivedAt = '2026-08-25T14:01:00.000Z';
 const baseFixtures: Record<AllowedRobinhoodTool, unknown> = {
-  get_accounts: { results: [{ account_number: '123456789', nickname: 'Primary brokerage', account_type: 'brokerage', deactivated: false, closed: false }] },
-  get_portfolio: { total_value: '175', cash: '25', accrued: '0', buying_power: '25', currency: 'USD' },
-  get_equity_positions: { results: [{ symbol: 'AAPL', quantity: '1', average_buy_price: '100', currency: 'USD' }], next: null },
-  get_equity_quotes: { results: [{ symbol: 'AAPL', quote: { last_trade_price: '125', last_trade_timestamp: '2026-08-25T14:00:30.000Z', last_extended_hours_trade_price: null, last_extended_hours_trade_timestamp: null, currency: 'USD' } }] },
-  get_option_positions: { results: [{ option_id: 'option-1', symbol: 'AAPL 260918C00100000', quantity: '1', currency: 'USD' }], next: null },
-  get_option_quotes: { results: [{ option_id: 'option-1', quote: { mark_price: '0.25', currency: 'USD' } }] },
-  get_option_instruments: { results: [{ option_id: 'option-1', trade_value_multiplier: '100', currency: 'USD' }] },
+  get_accounts: { accounts: [{ account_number: '123456789', rhs_account_number: '987654321', type: 'brokerage', brokerage_account_type: 'individual', is_default: true, agentic_allowed: true, option_level: 'option_level_3', state: 'active', deactivated: false, permanently_deactivated: false, nickname: 'Primary brokerage' }] },
+  get_portfolio: { total_value: '175', equity_value: '125', options_value: '25', futures_value: '0', event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0', mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD', buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' } },
+  get_equity_positions: { positions: [{ symbol: 'AAPL', quantity: '1', intraday_quantity: '0', shares_available_for_sells: '1', shares_held_for_sells: '0', shares_held_for_stock_grants: '0', shares_held_for_options_events: '0', shares_held_for_asset_transfer: '0', shares_pending_from_options_events: '0', type: 'equity', average_buy_price: '100' }] },
+  get_equity_quotes: { results: [{ quote: { symbol: 'AAPL', last_trade_price: '125', venue_last_trade_time: '2026-08-25T14:00:30.000Z', last_non_reg_trade_price: null, venue_last_non_reg_trade_time: null, adjusted_previous_close: '124', previous_close: '124', previous_close_date: '2026-08-22', bid_price: '124', bid_size: '1', ask_price: '126', ask_size: '1', has_traded: true, state: 'open', updated_at: '2026-08-25T14:00:30.000Z' } }] },
+  get_option_positions: { positions: [{ option_id: 'option-1', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000', type: 'option', quantity: '1', average_price: '0.2', expiration_date: '2026-09-18', trade_value_multiplier: '100', intraday_average_open_price: '0.2', intraday_quantity: '0', pending_buy_quantity: '0', pending_sell_quantity: '0', pending_assignment_quantity: '0', pending_exercise_quantity: '0', pending_expiration_quantity: '0' }] },
+  get_option_quotes: { results: [{ quote: { instrument_id: 'option-1', mark_price: '0.25', updated_at: '2026-08-25T14:00:30.000Z' } }] },
+  get_option_instruments: { instruments: [{ id: 'option-1', trade_value_multiplier: '100', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000' }] },
 };
 
 const openDatabases: Array<() => Promise<void>> = [];
@@ -98,7 +98,7 @@ describe('coherent Robinhood refresh', () => {
   it('rejects source-skewed live quote data before promotion', async () => {
     const fixtures = structuredClone(baseFixtures);
     const quote = (fixtures.get_equity_quotes as { results: Array<{ quote: Record<string, unknown> }> }).results[0]!;
-    quote.quote.last_trade_timestamp = '2026-08-25T13:57:59.000Z';
+    quote.quote.venue_last_trade_time = '2026-08-25T13:57:59.000Z';
     const { ownerId, repositories, service } = await setup(fixtures);
     await service.request(ownerId, 'scheduled');
     await expect(service.runNext('sync-worker-a')).resolves.toEqual({ state: 'failed', reason: 'source_skew_exceeded' });
@@ -122,7 +122,7 @@ describe('coherent Robinhood refresh', () => {
     await runSuccessfulRefresh(service, ownerId);
     const quote = (transport.fixtures.get_equity_quotes as { results: Array<{ quote: Record<string, unknown> }> }).results[0]!;
     quote.quote.last_trade_price = null;
-    quote.quote.last_trade_timestamp = null;
+    quote.quote.venue_last_trade_time = null;
     await service.request(ownerId, 'manual');
     await expect(service.runNext('sync-worker-b')).resolves.toEqual({ state: 'failed', reason: 'provider_schema_drift' });
     expect(await repositories.portfolios.getCurrent(ownerId)).toBeTruthy();
@@ -141,7 +141,7 @@ describe('coherent Robinhood refresh', () => {
     const { ownerId, repositories, service, transport } = await setup();
     await runSuccessfulRefresh(service, ownerId);
     const before = await repositories.portfolios.getCurrent(ownerId);
-    transport.fixtures.get_accounts = { results: [] };
+    transport.fixtures.get_accounts = { accounts: [] };
     await service.request(ownerId, 'scheduled');
     await expect(service.runNext('sync-worker-b')).resolves.toEqual({ state: 'failed', reason: 'expected_account_missing' });
     expect(await repositories.portfolios.getCurrent(ownerId)).toEqual(before);

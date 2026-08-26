@@ -27,6 +27,7 @@ function promotedSnapshot(input: {
       stableKey: 'account-1' as never,
       total: { state: 'available', value: usd(input.total) },
       cash: { state: 'available', value: usd(input.total) },
+      buyingPower: { state: 'available', value: usd(input.total) },
       accrued: { state: 'available', value: usd('0') },
       currency: 'USD',
       sourceAsOf: input.asOf,
