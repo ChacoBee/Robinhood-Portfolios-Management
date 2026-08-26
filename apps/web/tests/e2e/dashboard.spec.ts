@@ -47,6 +47,20 @@ test.describe('Aurum dashboard', () => {
     expect((await page.locator('.global-header').boundingBox())?.height).toBe(68);
   });
 
+  test('shell focus remains visible and reduced motion disables transitions', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await gotoPage(page, '/');
+
+    await page.keyboard.press('Tab');
+    const focused = page.locator(':focus-visible');
+    await expect(focused).toBeVisible();
+    expect(await focused.evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe('none');
+
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    const transition = await page.locator('.nav-link').first().evaluate((element) => getComputedStyle(element).transitionDuration);
+    expect(transition.split(',').every((value) => value.trim() === '0s')).toBe(true);
+  });
+
   test('shared financial surfaces use compact neutral panels', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 1000 });
     await gotoPage(page, '/');
