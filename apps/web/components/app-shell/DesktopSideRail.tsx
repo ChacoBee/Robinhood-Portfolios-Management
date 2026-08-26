@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
+import { NavigationIcon } from './NavigationIcon';
 import { pathIsActive, primaryNavigation } from './navigation';
 
 export function DesktopSideRail({ mode }: { mode: 'demo' | 'connected' }) {
@@ -25,7 +26,7 @@ export function DesktopSideRail({ mode }: { mode: 'demo' | 'connected' }) {
             href={item.href}
             key={item.href}
           >
-            <span aria-hidden="true" className="nav-glyph">{item.glyph}</span>
+            <NavigationIcon name={item.icon} />
             {item.label}
           </Link>
         ))}
@@ -38,6 +39,7 @@ export function DesktopSideRail({ mode }: { mode: 'demo' | 'connected' }) {
           <small>{mode === 'demo' ? 'No brokerage connected' : 'Verification required'}</small>
         </span>
       </div>
+      <p className="rail-read-only">Read-only · No trading access</p>
     </aside>
   );
 }

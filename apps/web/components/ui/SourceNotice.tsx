@@ -1,5 +1,9 @@
+'use client';
+
 import type { DataQualityReadModel, DataSourceMode } from '@aurum/domain';
+import { useEffect } from 'react';
 import { formatDateTime } from '../../lib/formatters';
+import { useSourceStatusObserver } from '../app-shell/source-status-context';
 
 export function SourceNotice({ mode, asOf, quality }: {
   mode: DataSourceMode;
@@ -7,6 +11,10 @@ export function SourceNotice({ mode, asOf, quality }: {
   quality?: DataQualityReadModel;
 }) {
   const isDemo = mode === 'demo';
+  const observeSourceStatus = useSourceStatusObserver();
+
+  useEffect(() => observeSourceStatus({ asOf, mode, quality }), [asOf, mode, observeSourceStatus, quality]);
+
   return (
     <section aria-label="Data source and quality" className={`source-notice ${isDemo ? 'is-demo' : ''}`}>
       <div>

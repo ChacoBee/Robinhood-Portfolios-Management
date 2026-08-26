@@ -1,13 +1,19 @@
+import type { NavigationIconName } from './NavigationIcon';
+
 export const primaryNavigation = [
-  { label: 'Overview', href: '/', glyph: 'OV' },
-  { label: 'Accounts', href: '/accounts', glyph: 'AC' },
-  { label: 'Holdings', href: '/holdings', glyph: 'HO' },
-  { label: 'Performance', href: '/performance', glyph: 'PF' },
-  { label: 'Analytics', href: '/analytics', glyph: 'AN' },
-  { label: 'Activity', href: '/activity', glyph: 'AT' },
-  { label: 'Alerts', href: '/alerts', glyph: 'AL' },
-  { label: 'Settings', href: '/settings', glyph: 'SE' },
-] as const;
+  { label: 'Dashboard', href: '/', icon: 'dashboard' },
+  { label: 'Accounts', href: '/accounts', icon: 'accounts' },
+  { label: 'Holdings', href: '/holdings', icon: 'holdings' },
+  { label: 'Performance', href: '/performance', icon: 'performance' },
+  { label: 'Allocation', href: '/analytics', icon: 'allocation' },
+  { label: 'Activity', href: '/activity', icon: 'activity' },
+  { label: 'Alerts', href: '/alerts', icon: 'alerts' },
+  { label: 'Settings', href: '/settings', icon: 'settings' },
+] as const satisfies readonly {
+  label: string;
+  href: string;
+  icon: NavigationIconName;
+}[];
 
 export function pathIsActive(pathname: string, href: string) {
   return href === '/' ? pathname === '/' : pathname === href || pathname.startsWith(`${href}/`);

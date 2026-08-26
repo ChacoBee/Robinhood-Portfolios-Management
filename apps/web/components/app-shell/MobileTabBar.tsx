@@ -3,21 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { pathIsActive } from './navigation';
+import { NavigationIcon } from './NavigationIcon';
+import { pathIsActive, primaryNavigation } from './navigation';
 import { useIslandReady } from '../../lib/client/use-island-ready';
 
-const directTabs = [
-  { label: 'Overview', href: '/', glyph: 'OV' },
-  { label: 'Holdings', href: '/holdings', glyph: 'HO' },
-  { label: 'Activity', href: '/activity', glyph: 'AT' },
-  { label: 'Alerts', href: '/alerts', glyph: 'AL' },
-] as const;
-const moreTabs = [
-  { label: 'Accounts', href: '/accounts' },
-  { label: 'Performance', href: '/performance' },
-  { label: 'Analytics', href: '/analytics' },
-  { label: 'Settings', href: '/settings' },
-] as const;
+const directDestinations = new Set(['/', '/holdings', '/activity', '/alerts']);
+const directTabs = primaryNavigation.filter((item) => directDestinations.has(item.href));
+const moreTabs = primaryNavigation.filter((item) => !directDestinations.has(item.href));
 
 export function MobileTabBar() {
   const ready = useIslandReady();
@@ -55,30 +47,14 @@ export function MobileTabBar() {
           href={item.href}
           key={item.href}
         >
-          <span aria-hidden="true">{item.glyph}</span>
+          <NavigationIcon name={item.icon} />
           <small>{item.label}</small>
         </Link>
       ))}
       <div className="mobile-more" ref={containerRef}>
-        {open ? (
-          <div aria-label="More pages" className="mobile-more-menu" role="menu">
-            {moreTabs.map((item) => (
-              <Link
-                aria-current={pathIsActive(pathname, item.href) ? 'page' : undefined}
-                href={item.href}
-                key={item.href}
-                onClick={() => setOpen(false)}
-                role="menuitem"
-              >
-                {item.label}
-              </Link>
-            ))}
-          </div>
-        ) : null}
         <button
           aria-current={moreActive ? 'page' : undefined}
           aria-expanded={open}
-          aria-haspopup="menu"
           aria-label="More navigation"
           className="mobile-tab"
           disabled={!ready}
@@ -89,6 +65,21 @@ export function MobileTabBar() {
           <span aria-hidden="true">•••</span>
           <small>More</small>
         </button>
+        {open ? (
+          <div aria-label="More pages" className="mobile-more-menu">
+            {moreTabs.map((item) => (
+              <Link
+                aria-current={pathIsActive(pathname, item.href) ? 'page' : undefined}
+                href={item.href}
+                key={item.href}
+                onClick={() => setOpen(false)}
+              >
+                <NavigationIcon name={item.icon} />
+                {item.label}
+              </Link>
+            ))}
+          </div>
+        ) : null}
       </div>
     </nav>
   );
