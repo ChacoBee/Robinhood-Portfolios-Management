@@ -36,7 +36,7 @@ async function renderedCompose() {
     encoding: 'utf8',
     env: { ...process.env, NODE_ENV: sentinels.NODE_ENV },
   })) as {
-    services: Record<string, { environment?: Record<string, string>; ports?: Array<{ host_ip?: string; published?: string; target?: number }>; profiles?: string[]; depends_on?: Record<string, { condition?: string }> }>;
+    services: Record<string, { command?: string[]; environment?: Record<string, string>; ports?: Array<{ host_ip?: string; published?: string; target?: number }>; profiles?: string[]; depends_on?: Record<string, { condition?: string }>; read_only?: boolean; tmpfs?: string[]; restart?: string }>;
   };
 }
 
@@ -47,7 +47,7 @@ afterEach(async () => {
 describe('connected Compose runtime', () => {
   it('isolates each service secret set and gates startup on healthy dependencies', async () => {
     const { services } = await renderedCompose();
-    expect(Object.keys(services).sort()).toEqual(['api', 'connect-robinhood', 'migrate', 'postgres', 'web', 'worker']);
+    expect(Object.keys(services).sort()).toEqual(['api', 'connect-robinhood', 'migrate', 'postgres', 'verify-enrollment', 'web', 'worker']);
     expect(services.postgres?.ports).toBeUndefined();
     expect(services.postgres?.environment).toEqual({
       POSTGRES_DB: sentinels.POSTGRES_DB,
@@ -82,6 +82,18 @@ describe('connected Compose runtime', () => {
       ROBINHOOD_OAUTH_ENCRYPTION_KEY: sentinels.ROBINHOOD_OAUTH_ENCRYPTION_KEY,
       AURUM_TRUSTED_COMPOSITION_MODULE: '/app/apps/server/src/runtime/trusted-composition.ts',
     });
+    expect(services['verify-enrollment']?.command).toEqual(['verify-enrollment']);
+    expect(services['verify-enrollment']?.environment).toEqual({
+      APP_MODE: sentinels.APP_MODE,
+      NODE_ENV: sentinels.NODE_ENV,
+      DATABASE_URL: sentinels.DATABASE_URL,
+      OWNER_CLERK_USER_ID: sentinels.OWNER_CLERK_USER_ID,
+      OWNER_EMAIL: sentinels.OWNER_EMAIL,
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: sentinels.ROBINHOOD_OAUTH_ENCRYPTION_KEY,
+    });
+    expect(services['verify-enrollment']?.read_only).toBe(true);
+    expect(services['verify-enrollment']?.tmpfs).toEqual(['/tmp']);
+    expect(services['verify-enrollment']?.restart).toBe('no');
     expect(services.web?.environment).toEqual({
       NODE_ENV: sentinels.NODE_ENV,
       AURUM_DATA_MODE: sentinels.AURUM_DATA_MODE,
@@ -100,6 +112,8 @@ describe('connected Compose runtime', () => {
     });
     expect(services.migrate?.depends_on?.postgres?.condition).toBe('service_healthy');
     expect(services.api?.depends_on?.migrate?.condition).toBe('service_completed_successfully');
+    expect(services['verify-enrollment']?.depends_on?.migrate?.condition).toBe('service_completed_successfully');
+    expect(services.worker?.depends_on?.['verify-enrollment']?.condition).toBe('service_completed_successfully');
     expect(services.web?.depends_on?.api?.condition).toBe('service_healthy');
     expect(services.api?.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '8787', target: 8787 })]);
     expect(services.web?.ports).toEqual([expect.objectContaining({ host_ip: '127.0.0.1', published: '3000', target: 3000 })]);

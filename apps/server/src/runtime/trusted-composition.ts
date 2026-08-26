@@ -9,6 +9,7 @@ import { RobinhoodOAuthStore } from '../robinhood/oauth-store';
 import { createPostgresAlertEvaluator } from '../alerts/postgres-evaluator';
 import { bootstrapConfiguredOwner } from './owner-bootstrap';
 import { createClerkOwnerVerifier, type ClerkOwnerVerifierOptions } from './clerk-owner-verifier';
+import { verifyRobinhoodEnrollment } from './enrollment-verification';
 
 export interface RuntimeResources {
   database: DatabaseClient;
@@ -29,7 +30,7 @@ export interface WorkerCompositionOptions {
   resources?: RuntimeResources;
   repositories?: RuntimeRepositories;
   ownerId?: string;
-  createStore?: (credentials: RuntimeRepositories['oauthCredentials'], ownerId: string, key: string) => Pick<RobinhoodOAuthStore, 'markHeartbeat'> & Partial<RobinhoodOAuthStore>;
+  createStore?: (credentials: RuntimeRepositories['oauthCredentials'], ownerId: string, key: string) => Pick<RobinhoodOAuthStore, 'load' | 'markHeartbeat'>;
   evaluateAlerts?: (input: { userId: string; snapshotId: string; sourceAsOf: string; calculationVersion: string }) => Promise<void>;
 }
 
@@ -77,12 +78,14 @@ export async function createWorkerComposition(options: WorkerCompositionOptions 
     const repositories = options.repositories ?? createRepositories(resources.database);
     const ownerId = await configuredOwnerId(repositories, options.ownerId, { clerkUserId: config.OWNER_CLERK_USER_ID, email: config.OWNER_EMAIL });
     const store = options.createStore?.(repositories.oauthCredentials, ownerId, config.ROBINHOOD_OAUTH_ENCRYPTION_KEY) ?? new RobinhoodOAuthStore(repositories.oauthCredentials as OAuthCredentialRepository, ownerId, config.ROBINHOOD_OAUTH_ENCRYPTION_KEY);
+    await verifyRobinhoodEnrollment(store);
     const evaluateAlerts = options.evaluateAlerts ?? createPostgresAlertEvaluator({ database: resources.database, alerts: repositories.alerts });
     return {
       resources,
       ownerId,
       endpoint: robinhoodMcpEndpoint,
       approvedEndpointOrigins: ['https://agent.robinhood.com'] as const,
+      verifyEnrollment: () => verifyRobinhoodEnrollment(store),
       authProvider: new RobinhoodOAuthProvider({ store: store as RobinhoodOAuthStore }),
       async afterSnapshotPromoted(input: { userId: string; snapshotId: string; sourceAsOf: string; calculationVersion: string }) { await evaluateAlerts(input); await store.markHeartbeat(); },
     };

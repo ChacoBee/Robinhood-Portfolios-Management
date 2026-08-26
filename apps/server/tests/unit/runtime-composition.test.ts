@@ -72,6 +72,44 @@ describe('trusted runtime composition loader', () => {
     expect(close).toHaveBeenCalledOnce();
   });
 
+  it('rejects worker composition before creating provider authority when enrollment is not connected', async () => {
+    const close = vi.fn();
+    const load = vi.fn().mockResolvedValue({
+      connectionState: 'enrolling',
+      tokenSet: 'encrypted',
+      clientInformation: null,
+      tokenUpdatedAt: null,
+      lastHeartbeatAt: null,
+    });
+    const createStore = vi.fn(() => ({ load, markHeartbeat: vi.fn() }));
+
+    await expect(createWorkerComposition({
+      environment: workerEnvironment,
+      resources: { database: { close } as never, close },
+      repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
+      ownerId: '11111111-1111-5111-8111-111111111111',
+      createStore,
+    })).rejects.toThrow('verified_robinhood_authorization_required');
+
+    expect(createStore).toHaveBeenCalledOnce();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('rejects worker composition when the encrypted enrollment cannot be decrypted', async () => {
+    const close = vi.fn();
+    const load = vi.fn().mockRejectedValue(new Error('synthetic_decryption_failure'));
+
+    await expect(createWorkerComposition({
+      environment: workerEnvironment,
+      resources: { database: { close } as never, close },
+      repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
+      ownerId: '11111111-1111-5111-8111-111111111111',
+      createStore: () => ({ load, markHeartbeat: vi.fn() }),
+    })).rejects.toThrow('verified_robinhood_authorization_required');
+
+    expect(close).toHaveBeenCalledOnce();
+  });
+
   it('pins the worker endpoint, stores OAuth by internal owner UUID, and heartbeats only after promotion', async () => {
     const markHeartbeat = vi.fn();
     const evaluateAlerts = vi.fn();
@@ -80,7 +118,7 @@ describe('trusted runtime composition loader', () => {
       resources: { database: { close: vi.fn() } as never, close: vi.fn() },
       repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
       ownerId: '11111111-1111-5111-8111-111111111111',
-      createStore: (_credentials, ownerId) => ({ ownerId, markHeartbeat }),
+      createStore: (_credentials, ownerId) => ({ ownerId, load: vi.fn().mockResolvedValue({ connectionState: 'connected', tokens: { token: 'synthetic' } }), markHeartbeat }),
       evaluateAlerts,
     });
     expect(composition.endpoint).toBe('https://agent.robinhood.com/mcp/trading');
@@ -98,7 +136,7 @@ describe('trusted runtime composition loader', () => {
       resources: { database: { close: vi.fn() } as never, close: vi.fn() },
       repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
       ownerId: '11111111-1111-5111-8111-111111111111',
-      createStore: () => ({ markHeartbeat }),
+      createStore: () => ({ load: vi.fn().mockResolvedValue({ connectionState: 'connected', tokens: { token: 'synthetic' } }), markHeartbeat }),
       evaluateAlerts: async () => { throw new Error('alert_evaluation_failed'); },
     });
     await expect(composition.afterSnapshotPromoted({ userId: 'owner', snapshotId: 'snapshot', sourceAsOf: '2026-08-26T12:00:00.000Z', calculationVersion: 'v1' })).rejects.toThrow('alert_evaluation_failed');

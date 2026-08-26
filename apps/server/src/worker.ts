@@ -25,6 +25,7 @@ export interface TrustedRobinhoodWorkerComposition {
   ownerId?: string;
   endpoint: string;
   approvedEndpointOrigins: readonly string[];
+  verifyEnrollment(): Promise<void>;
   authProvider: RobinhoodAuthProvider;
   afterSnapshotPromoted: (input: {
     userId: string;
@@ -53,6 +54,20 @@ export async function startWorker(
       'createWorkerComposition',
     ));
   if (!resolvedComposition) {
+    throw new Error('verified_robinhood_authorization_required');
+  }
+  if (!resolvedComposition.verifyEnrollment) {
+    await resolvedComposition.resources?.close();
+    throw new Error('verified_robinhood_authorization_required');
+  }
+  try {
+    await resolvedComposition.verifyEnrollment();
+  } catch {
+    try {
+      await resolvedComposition.resources?.close();
+    } catch {
+      // Verification remains fail-closed if cleanup is unavailable.
+    }
     throw new Error('verified_robinhood_authorization_required');
   }
   if (!resolvedComposition.afterSnapshotPromoted) {

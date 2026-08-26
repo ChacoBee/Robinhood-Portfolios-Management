@@ -17,8 +17,11 @@ case "${1:-}" in
   connect-robinhood)
     exec node --import tsx apps/server/src/robinhood/connect-cli.ts
     ;;
+  verify-enrollment)
+    exec node --import tsx apps/server/src/verify-enrollment.ts
+    ;;
   *)
-    echo "usage: aurum {api|worker|web|migrate|connect-robinhood}" >&2
+    echo "usage: aurum {api|worker|web|migrate|connect-robinhood|verify-enrollment}" >&2
     exit 64
     ;;
 esac

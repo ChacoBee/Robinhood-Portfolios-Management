@@ -70,12 +70,30 @@ services:
       ROBINHOOD_OAUTH_ENCRYPTION_KEY: ${ROBINHOOD_OAUTH_ENCRYPTION_KEY:?Set ROBINHOOD_OAUTH_ENCRYPTION_KEY in the operator environment}
       AURUM_TRUSTED_COMPOSITION_MODULE: /app/apps/server/src/runtime/trusted-composition.ts
     depends_on:
-      migrate:
+      verify-enrollment:
         condition: service_completed_successfully
     read_only: true
     tmpfs:
       - /tmp
     restart: unless-stopped
+
+  verify-enrollment:
+    build: .
+    command: verify-enrollment
+    environment:
+      APP_MODE: ${APP_MODE:?Set APP_MODE in the operator environment}
+      NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
+      DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the operator environment}
+      OWNER_CLERK_USER_ID: ${OWNER_CLERK_USER_ID:?Set OWNER_CLERK_USER_ID in the operator environment}
+      OWNER_EMAIL: ${OWNER_EMAIL:?Set OWNER_EMAIL in the operator environment}
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: ${ROBINHOOD_OAUTH_ENCRYPTION_KEY:?Set ROBINHOOD_OAUTH_ENCRYPTION_KEY in the operator environment}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs:
+      - /tmp
+    restart: "no"
 
   web:
     build: .
