@@ -46,7 +46,7 @@ export function createPostgresAlertEvaluator(options: { database: DatabaseClient
         const cash = await options.database.query<Scalar>(currentRule.scope.id ? 'select sum(settled_cash) as amount from cash_observations where sync_run_id = $1 and account_id = $2' : 'select sum(settled_cash) as amount from cash_observations where sync_run_id = $1', currentRule.scope.id ? [snapshot.sync_run_id, currentRule.scope.id] : [snapshot.sync_run_id]);
         result.observedMoney = money(dec(cash.rows[0]?.amount));
       }
-      if ((currentRule.kind === 'concentration_threshold' || currentRule.kind === 'holding_percentage_move') && total) {
+      if ((currentRule.kind === 'concentration_threshold' || currentRule.kind === 'holding_percentage_move') && total && !total.isZero()) {
         const holding = await options.database.query<Scalar>(currentRule.scope.id ? 'select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2' : 'select max(total) as amount from (select sum(provider_market_value) as total from position_observations where sync_run_id = $1 group by security_id) eligible', currentRule.scope.id ? [snapshot.sync_run_id, currentRule.scope.id] : [snapshot.sync_run_id]);
         const value = dec(holding.rows[0]?.amount); if (value) { result.observedMoney = money(value); result.observedRatio = ratio(value.div(total).toFixed()); }
       }

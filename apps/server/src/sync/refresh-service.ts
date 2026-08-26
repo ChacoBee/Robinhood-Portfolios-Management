@@ -217,6 +217,9 @@ export class RefreshService {
         syncRunId,
         bundles,
         receivedAt,
+        trigger: requestedTrigger.success
+          ? requestedTrigger.data.trigger
+          : 'scheduled',
         ...this.dependencies.valuationSession(),
       });
 

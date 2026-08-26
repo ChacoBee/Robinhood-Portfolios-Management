@@ -24,7 +24,7 @@ export function isRegularCloseCheckpoint(asOf: string, lastRegularCloseAt: strin
   if (!lastRegularCloseAt) return false;
   const checkpoint = Date.parse(lastRegularCloseAt) + 5 * 60_000;
   const observed = Date.parse(asOf);
-  return Number.isFinite(observed) && observed >= checkpoint && observed < checkpoint + 4 * 60 * 60_000;
+  return Number.isFinite(observed) && observed >= checkpoint && observed < checkpoint + 60 * 60_000;
 }
 
 export interface AccountRefreshBundle {
@@ -39,6 +39,7 @@ export interface SnapshotPromotionInput {
   syncRunId: string;
   bundles: readonly AccountRefreshBundle[];
   receivedAt: string;
+  trigger?: 'manual' | 'page_load' | 'heartbeat' | 'scheduled';
   phase?: ValuationSessionPhase;
   lastRegularCloseAt?: string | null;
   maxSourceSkewSeconds?: number;
@@ -488,7 +489,9 @@ export function buildSnapshotPromotion(
       quality: {
         mixedMarketState: marketStates.size > 1,
         unsupportedWeight: new Decimal(totalValue.amount).isZero() ? '1' : new Decimal(unsupportedDetailValue.amount).div(totalValue.amount).toFixed(),
-        regularSessionCloseEligible: isRegularCloseCheckpoint(freshness.asOf, input.lastRegularCloseAt),
+        regularSessionCloseEligible:
+          input.trigger === 'scheduled' &&
+          isRegularCloseCheckpoint(input.receivedAt, input.lastRegularCloseAt),
       },
       sourceWindow: {
         start: freshness.sourceWindowStart,

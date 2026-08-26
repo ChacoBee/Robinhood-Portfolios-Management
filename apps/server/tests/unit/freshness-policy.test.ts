@@ -12,8 +12,9 @@ function promotionBundle(input: {
   status: 'active' | 'closed';
   total: string;
   marketState?: 'regular' | 'extended' | 'closed' | 'unknown';
+  sourceAsOf?: string;
 }): AccountRefreshBundle {
-  const at = '2026-08-25T20:05:00.000Z';
+  const at = input.sourceAsOf ?? '2026-08-25T20:05:00.000Z';
   return {
     account: {
       providerRef: `sealed-${input.stableKey}` as never,
@@ -52,13 +53,48 @@ function promotionBundle(input: {
 describe('valuation source freshness', () => {
   it('recognizes only the scheduled 4:05pm ET close checkpoint window', () => {
     expect(isRegularCloseCheckpoint('2026-08-25T20:05:00.000Z', '2026-08-25T20:00:00.000Z')).toBe(true);
+    expect(isRegularCloseCheckpoint('2026-08-25T20:04:59.999Z', '2026-08-25T20:00:00.000Z')).toBe(false);
+    expect(isRegularCloseCheckpoint('2026-08-25T21:05:00.000Z', '2026-08-25T20:00:00.000Z')).toBe(false);
     expect(isRegularCloseCheckpoint('2026-08-26T00:05:00.000Z', '2026-08-25T20:00:00.000Z')).toBe(false);
+  });
+
+  it('marks only a scheduled close refresh by receipt time, not quote time or the next hourly refresh', () => {
+    const common = {
+      syncRunId: 'run-close',
+      phase: 'extended' as const,
+      lastRegularCloseAt: '2026-08-25T20:00:00.000Z',
+    };
+    const close = buildSnapshotPromotion({
+      ...common,
+      receivedAt: '2026-08-25T20:05:00.000Z',
+      trigger: 'scheduled',
+      bundles: [promotionBundle({ stableKey: 'close', status: 'active', total: '100', sourceAsOf: '2026-08-25T20:04:00.000Z' })],
+    });
+    const hourly = buildSnapshotPromotion({
+      ...common,
+      syncRunId: 'run-hourly',
+      receivedAt: '2026-08-25T21:05:00.000Z',
+      trigger: 'scheduled',
+      bundles: [promotionBundle({ stableKey: 'hourly', status: 'active', total: '100', sourceAsOf: '2026-08-25T21:04:00.000Z' })],
+    });
+    const manual = buildSnapshotPromotion({
+      ...common,
+      syncRunId: 'run-manual',
+      receivedAt: '2026-08-25T20:05:00.000Z',
+      trigger: 'manual',
+      bundles: [promotionBundle({ stableKey: 'manual', status: 'active', total: '100', sourceAsOf: '2026-08-25T20:04:00.000Z' })],
+    });
+
+    expect(close.payload).toMatchObject({ quality: { regularSessionCloseEligible: true } });
+    expect(hourly.payload).toMatchObject({ quality: { regularSessionCloseEligible: false } });
+    expect(manual.payload).toMatchObject({ quality: { regularSessionCloseEligible: false } });
   });
 
   it('derives promotion quality only from included accounts and conservatively represents zero totals', () => {
     const input = {
       syncRunId: 'run-1',
       receivedAt: '2026-08-25T20:05:00.000Z',
+      trigger: 'scheduled' as const,
       phase: 'extended' as const,
       lastRegularCloseAt: '2026-08-25T20:00:00.000Z',
     };

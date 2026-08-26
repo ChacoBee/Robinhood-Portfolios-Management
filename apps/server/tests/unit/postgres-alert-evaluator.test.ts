@@ -47,6 +47,7 @@ function promotedSnapshot(input: {
     syncRunId: input.syncRunId,
     bundles: [bundle],
     receivedAt: input.asOf,
+    trigger: 'scheduled',
     phase: 'extended',
     lastRegularCloseAt: input.asOf.replace(/T20:05:00.000Z$/, 'T20:00:00.000Z'),
   });
@@ -114,6 +115,22 @@ describe('PostgreSQL promoted-snapshot alert evaluator', () => {
     });
     await createPostgresAlertEvaluator({ database: { query } as never, alerts: { appendEvent } })({ userId: 'owner', snapshotId: 'current', sourceAsOf: current.as_of, calculationVersion: 'v1' });
     expect(appendEvent).toHaveBeenCalledWith(expect.objectContaining({ state, evidence: expect.objectContaining({ observedRatio: observedRatio === null ? null : { value: observedRatio }, flowAdjustment: null, baselineObservationId: 'prior', scope: expect.objectContaining({ type: 'holding' }) }) }));
+  });
+
+  it('suppresses zero-total concentration without dividing by zero', async () => {
+    const appendEvent = vi.fn();
+    const snapshot = { id: 'zero', sync_run_id: 'run-zero', total_value: '0', as_of: '2026-08-26T12:00:00.000Z', coverage: 'complete', freshness: 'fresh', reconciliation_status: 'reconciled', payload: { quality: { mixedMarketState: false, unsupportedWeight: '1' } } };
+    const query = vi.fn(async (sql: string) => {
+      if (sql.includes('where id = $1')) return { rows: [snapshot] };
+      if (sql.includes('from alert_rules')) return { rows: [{ id: 'concentration', kind: 'concentration_threshold', enabled: true, threshold: { value: '0.2', scopeId: 'security-1' }, baseline: null, cooldown_seconds: 300, daily_cap: 1 }] };
+      return { rows: [{ amount: '100' }] };
+    });
+
+    await expect(createPostgresAlertEvaluator({ database: { query } as never, alerts: { appendEvent } })({ userId: 'owner', snapshotId: 'zero', sourceAsOf: snapshot.as_of, calculationVersion: 'v1' })).resolves.toBeUndefined();
+    expect(appendEvent).toHaveBeenCalledWith(expect.objectContaining({
+      state: 'suppressed',
+      evidence: expect.objectContaining({ observedRatio: null, quality: expect.objectContaining({ unsupportedWeight: { value: '1' } }) }),
+    }));
   });
 
   it('consumes the real promotion quality payload and its true regular-close marker', async () => {
