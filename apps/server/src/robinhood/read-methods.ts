@@ -1,16 +1,17 @@
 export const allowedRobinhoodTools = [
-  'mcp__robinhood__get_accounts',
-  'mcp__robinhood__get_portfolio',
-  'mcp__robinhood__get_equity_positions',
-  'mcp__robinhood__get_equity_quotes',
-  'mcp__robinhood__get_option_positions',
+  'get_accounts',
+  'get_portfolio',
+  'get_equity_positions',
+  'get_equity_quotes',
+  'get_option_positions',
+  'get_option_quotes',
+  'get_option_instruments',
 ] as const;
 
 export type AllowedRobinhoodTool = (typeof allowedRobinhoodTools)[number];
 
 export const requiredRobinhoodReadScopes = [
-  'accounts:read',
-  'positions:read',
+  'internal',
 ] as const;
 
 export type RobinhoodReadScope = (typeof requiredRobinhoodReadScopes)[number];

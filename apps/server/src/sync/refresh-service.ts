@@ -6,6 +6,10 @@ import {
 } from '../db/repositories';
 import type { JobRecord, JobRepository } from '../db/jobs';
 import type { RobinhoodReadClient } from '../robinhood/client';
+import {
+  valueEquityPositions,
+  valueOptionPositions,
+} from '../robinhood/mapper';
 import { ProviderBoundaryError } from '../robinhood/errors';
 import { PublicRefreshRequestSchema } from '../robinhood/schemas';
 import {
@@ -26,6 +30,8 @@ export interface RefreshServiceDependencies {
     | 'readEquityPositions'
     | 'readEquityQuotes'
     | 'readOptionPositions'
+    | 'readOptionQuotes'
+    | 'readOptionInstruments'
   >;
   portfolios: PortfolioRepository;
   jobs: JobRepository;
@@ -165,8 +171,41 @@ export class RefreshService {
         quoteRequests.length === 0
           ? []
           : await this.dependencies.client.readEquityQuotes(quoteRequests);
+      const optionIds = [
+        ...new Set(
+          partialBundles.flatMap((bundle) =>
+            bundle.optionPositions.map((position) => position.optionId),
+          ),
+        ),
+      ];
+      const [optionQuotes, optionInstruments] =
+        optionIds.length === 0
+          ? [[], []] as const
+          : await Promise.all([
+              this.dependencies.client.readOptionQuotes(optionIds),
+              this.dependencies.client.readOptionInstruments(optionIds),
+            ]);
+      const receivedAt = this.now().toISOString();
       const bundles: AccountRefreshBundle[] = partialBundles.map((bundle) => ({
         ...bundle,
+        equityPositions: valueEquityPositions(
+          bundle.equityPositions,
+          quotes.filter((quote) =>
+            bundle.equityPositions.some(
+              (position) => position.instrumentId === quote.instrumentId,
+            ),
+          ),
+        ),
+        optionPositions: valueOptionPositions(
+          bundle.optionPositions,
+          optionQuotes.filter((quote) =>
+            bundle.optionPositions.some((position) => position.optionId === quote.optionId),
+          ),
+          optionInstruments.filter((instrument) =>
+            bundle.optionPositions.some((position) => position.optionId === instrument.optionId),
+          ),
+          receivedAt,
+        ),
         quotes: quotes.filter((quote) =>
           bundle.equityPositions.some(
             (position) => position.instrumentId === quote.instrumentId,
@@ -174,7 +213,6 @@ export class RefreshService {
         ),
       }));
       const snapshotId = this.createId();
-      const receivedAt = this.now().toISOString();
       const promotion = buildSnapshotPromotion({
         syncRunId,
         bundles,

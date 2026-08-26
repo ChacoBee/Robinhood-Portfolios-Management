@@ -1,197 +1,119 @@
 import { z } from 'zod';
 
 const DecimalStringSchema = z.string().regex(/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/);
-const TimestampSchema = z.string().datetime({ offset: true });
 const CurrencySchema = z.string().regex(/^[A-Z]{3}$/);
-const MarketStateSchema = z.enum(['regular', 'extended', 'closed', 'unknown']);
+const CursorSchema = z.string().min(1).nullable();
+
+const PageSchema = <T extends z.ZodType>(row: T) =>
+  z.object({ results: z.array(row.nullable()), next: CursorSchema }).strict();
 
 export const ProviderAccountSchema = z
   .object({
-    account_id: z.string().min(1),
-    account_number: z.string().min(1).nullable().optional(),
-    display_name: z.string().min(1),
-    status: z.enum(['active', 'closed']),
-    total_kind: z.enum([
-      'provider_portfolio_value',
-      'net_liquidation_value',
-      'account_equity',
-      'unknown',
-    ]),
-    source_as_of: TimestampSchema,
+    account_number: z.string().min(1),
+    nickname: z.string().min(1).nullable().optional(),
+    account_type: z.string().min(1).nullable().optional(),
+    deactivated: z.boolean().optional(),
+    closed: z.boolean().optional(),
   })
   .strict();
 
 export const ProviderAccountsResponseSchema = z
-  .object({ accounts: z.array(ProviderAccountSchema) })
+  .object({ results: z.array(ProviderAccountSchema.nullable()) })
   .strict();
 
 export const ProviderPortfolioResponseSchema = z
   .object({
-    account_id: z.string().min(1),
     total_value: DecimalStringSchema.nullable(),
     cash: DecimalStringSchema.nullable(),
-    accrued: DecimalStringSchema.nullable(),
+    accrued: DecimalStringSchema.nullable().optional(),
+    buying_power: DecimalStringSchema.nullable().optional(),
     currency: CurrencySchema,
-    source_as_of: TimestampSchema,
   })
   .strict();
 
 export const ProviderEquityPositionSchema = z
   .object({
-    account_id: z.string().min(1),
-    instrument_id: z.string().min(1),
     symbol: z.string().min(1),
-    name: z.string().min(1),
-    asset_class: z.string().min(1),
     quantity: DecimalStringSchema,
-    market_value: DecimalStringSchema.nullable(),
-    cost_basis: DecimalStringSchema.nullable(),
-    cost_basis_source: z.enum([
-      'provider_average',
-      'calculated_complete',
-      'calculated_partial',
-      'unavailable',
-    ]),
+    average_buy_price: DecimalStringSchema.nullable(),
     currency: CurrencySchema,
-    source_as_of: TimestampSchema,
+    name: z.string().min(1).nullable().optional(),
+    asset_class: z.string().min(1).nullable().optional(),
   })
   .strict();
 
-export const ProviderEquityPositionsResponseSchema = z
-  .object({ positions: z.array(ProviderEquityPositionSchema) })
+export const ProviderEquityPositionsResponseSchema = PageSchema(
+  ProviderEquityPositionSchema,
+);
+
+const ProviderEquityQuotePayloadSchema = z
+  .object({
+    last_trade_price: DecimalStringSchema.nullable(),
+    last_trade_timestamp: z.string().datetime({ offset: true }).nullable(),
+    last_extended_hours_trade_price: DecimalStringSchema.nullable(),
+    last_extended_hours_trade_timestamp: z
+      .string()
+      .datetime({ offset: true })
+      .nullable(),
+    currency: CurrencySchema,
+  })
   .strict();
 
 export const ProviderQuoteSchema = z
-  .object({
-    instrument_id: z.string().min(1),
-    symbol: z.string().min(1),
-    price: DecimalStringSchema,
-    currency: CurrencySchema,
-    market_state: MarketStateSchema,
-    source_as_of: TimestampSchema,
-  })
+  .object({ symbol: z.string().min(1), quote: ProviderEquityQuotePayloadSchema })
   .strict();
 
 export const ProviderQuotesResponseSchema = z
-  .object({ quotes: z.array(ProviderQuoteSchema) })
+  .object({ results: z.array(ProviderQuoteSchema.nullable()) })
   .strict();
 
 export const ProviderOptionPositionSchema = z
   .object({
-    account_id: z.string().min(1),
     option_id: z.string().min(1),
     symbol: z.string().min(1),
     quantity: DecimalStringSchema,
-    market_value: DecimalStringSchema.nullable(),
     currency: CurrencySchema,
-    source_as_of: TimestampSchema,
   })
   .strict();
 
-export const ProviderOptionPositionsResponseSchema = z
-  .object({ positions: z.array(ProviderOptionPositionSchema) })
-  .strict();
+export const ProviderOptionPositionsResponseSchema = PageSchema(
+  ProviderOptionPositionSchema,
+);
 
-export const ProviderOrderSchema = z
+export const ProviderOptionQuoteSchema = z
   .object({
-    order_id: z.string().min(1),
-    account_id: z.string().min(1),
-    asset_type: z.enum(['equity', 'option']),
-    state: z.string().min(1),
-    side: z.string().min(1),
-    quantity: DecimalStringSchema,
-    created_at: TimestampSchema,
+    option_id: z.string().min(1),
+    quote: z
+      .object({ mark_price: DecimalStringSchema.nullable(), currency: CurrencySchema })
+      .strict(),
   })
   .strict();
-
-export const ProviderOrdersResponseSchema = z
-  .object({ orders: z.array(ProviderOrderSchema) })
+export const ProviderOptionQuotesResponseSchema = z
+  .object({ results: z.array(ProviderOptionQuoteSchema.nullable()) })
   .strict();
 
-export const ProviderTaxLotSchema = z
+export const ProviderOptionInstrumentSchema = z
   .object({
-    lot_id: z.string().min(1),
-    account_id: z.string().min(1),
-    instrument_id: z.string().min(1),
-    quantity: DecimalStringSchema,
-    cost_basis: DecimalStringSchema.nullable(),
+    option_id: z.string().min(1),
+    trade_value_multiplier: DecimalStringSchema.nullable(),
     currency: CurrencySchema,
-    acquired_at: TimestampSchema.nullable(),
   })
   .strict();
-
-export const ProviderTaxLotsResponseSchema = z
-  .object({ lots: z.array(ProviderTaxLotSchema) })
-  .strict();
-
-export const ProviderRealizedPnlResponseSchema = z
-  .object({
-    account_id: z.string().min(1),
-    amount: DecimalStringSchema.nullable(),
-    currency: CurrencySchema,
-    method: z.string().min(1).nullable(),
-    source_as_of: TimestampSchema,
-  })
-  .strict();
-
-export const ProviderPnlTradeHistoryResponseSchema = z
-  .object({
-    trades: z.array(
-      z
-        .object({
-          trade_id: z.string().min(1),
-          account_id: z.string().min(1),
-          symbol: z.string().min(1),
-          amount: DecimalStringSchema.nullable(),
-          currency: CurrencySchema,
-          executed_at: TimestampSchema,
-        })
-        .strict(),
-    ),
-  })
+export const ProviderOptionInstrumentsResponseSchema = z
+  .object({ results: z.array(ProviderOptionInstrumentSchema.nullable()) })
   .strict();
 
 export const PublicRefreshRequestSchema = z
-  .object({
-    trigger: z.enum(['manual', 'page_load', 'heartbeat', 'scheduled']),
-  })
+  .object({ trigger: z.enum(['manual', 'page_load', 'heartbeat', 'scheduled']) })
   .strict();
-
-export const PublicDisconnectRequestSchema = z
-  .object({ confirm: z.literal(true) })
-  .strict();
-
-export const PublicRefreshRequestJsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['trigger'],
-  properties: {
-    trigger: {
-      type: 'string',
-      enum: ['manual', 'page_load', 'heartbeat', 'scheduled'],
-    },
-  },
-} as const;
-
-export const PublicDisconnectRequestJsonSchema = {
-  type: 'object',
-  additionalProperties: false,
-  required: ['confirm'],
-  properties: { confirm: { const: true } },
-} as const;
+export const PublicDisconnectRequestSchema = z.object({ confirm: z.literal(true) }).strict();
+export const PublicRefreshRequestJsonSchema = { type: 'object', additionalProperties: false, required: ['trigger'], properties: { trigger: { type: 'string', enum: ['manual', 'page_load', 'heartbeat', 'scheduled'] } } } as const;
+export const PublicDisconnectRequestJsonSchema = { type: 'object', additionalProperties: false, required: ['confirm'], properties: { confirm: { const: true } } } as const;
 
 export type ProviderAccount = z.infer<typeof ProviderAccountSchema>;
-export type ProviderPortfolioResponse = z.infer<
-  typeof ProviderPortfolioResponseSchema
->;
+export type ProviderPortfolioResponse = z.infer<typeof ProviderPortfolioResponseSchema>;
 export type ProviderEquityPosition = z.infer<typeof ProviderEquityPositionSchema>;
 export type ProviderQuote = z.infer<typeof ProviderQuoteSchema>;
 export type ProviderOptionPosition = z.infer<typeof ProviderOptionPositionSchema>;
-export type ProviderOrder = z.infer<typeof ProviderOrderSchema>;
-export type ProviderTaxLot = z.infer<typeof ProviderTaxLotSchema>;
-export type ProviderRealizedPnlResponse = z.infer<
-  typeof ProviderRealizedPnlResponseSchema
->;
-export type ProviderPnlTrade = z.infer<
-  typeof ProviderPnlTradeHistoryResponseSchema
->['trades'][number];
+export type ProviderOptionQuote = z.infer<typeof ProviderOptionQuoteSchema>;
+export type ProviderOptionInstrument = z.infer<typeof ProviderOptionInstrumentSchema>;

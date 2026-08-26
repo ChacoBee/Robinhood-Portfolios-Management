@@ -16,7 +16,7 @@ function grant(
 ): VerifiedRobinhoodAuthorizationGrant {
   return {
     header: 'Bearer synthetic-token',
-    actualScopes: ['accounts:read', 'positions:read'],
+    actualScopes: ['internal'],
     issuer: expectedIssuer,
     audience: expectedAudience,
     expiresAt: '2026-08-25T14:05:00.000Z',
@@ -52,7 +52,7 @@ describe('Robinhood MCP transport boundary', () => {
       ...options(
         provider(
           grant({
-            actualScopes: ['accounts:read', 'positions:read', 'orders:write'],
+            actualScopes: ['internal', 'orders:write'],
           } as Partial<VerifiedRobinhoodAuthorizationGrant>),
         ),
       ),
@@ -60,7 +60,7 @@ describe('Robinhood MCP transport boundary', () => {
     });
 
     await expect(
-      transport.call('mcp__robinhood__get_accounts', {}),
+      transport.call('get_accounts', {}),
     ).rejects.toThrow('provider_scope_invalid');
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
@@ -75,7 +75,7 @@ describe('Robinhood MCP transport boundary', () => {
     });
 
     await expect(
-      transport.call('mcp__robinhood__get_accounts', {}),
+      transport.call('get_accounts', {}),
     ).rejects.toThrow('provider_authorization_invalid');
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
@@ -88,7 +88,7 @@ describe('Robinhood MCP transport boundary', () => {
     });
 
     await expect(
-      transport.call('mcp__robinhood__get_accounts', {}),
+      transport.call('get_accounts', {}),
     ).rejects.toThrow('provider_authorization_invalid');
     expect(fetchImplementation).not.toHaveBeenCalled();
   });
@@ -121,7 +121,7 @@ describe('Robinhood MCP transport boundary', () => {
 
     let error: unknown;
     try {
-      await transport.call('mcp__robinhood__get_accounts', {});
+      await transport.call('get_accounts', {});
     } catch (caught) {
       error = caught;
     }
@@ -153,7 +153,7 @@ describe('Robinhood MCP transport boundary', () => {
 
     let error: unknown;
     try {
-      await transport.call('mcp__robinhood__get_accounts', {});
+      await transport.call('get_accounts', {});
     } catch (caught) {
       error = caught;
     }
