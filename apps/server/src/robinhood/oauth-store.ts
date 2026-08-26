@@ -72,6 +72,13 @@ export class RobinhoodOAuthStore {
     }
   }
 
+  async markConnected(): Promise<void> {
+    const marked = await this.credentials.markConnected(this.ownerId, provider);
+    if (!marked) {
+      throw new OAuthCredentialError('oauth_credentials_incomplete');
+    }
+  }
+
   async markHeartbeat(): Promise<void> {
     await this.credentials.markHeartbeat(this.ownerId, provider);
   }

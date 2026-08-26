@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "tsx watch src/api.ts",
     "worker": "tsx watch src/worker.ts",
+    "connect-robinhood": "tsx src/robinhood/connect-cli.ts",
     "build": "tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",

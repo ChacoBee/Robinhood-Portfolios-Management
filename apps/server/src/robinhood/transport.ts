@@ -41,6 +41,7 @@ export interface McpSdkClient {
 export interface McpClientFactoryInput {
   endpoint: URL;
   authProvider: RobinhoodAuthProvider;
+  fetch?: typeof fetch;
 }
 
 export type McpClientFactory = (input: McpClientFactoryInput) => McpSdkClient;
@@ -50,11 +51,15 @@ export interface SdkMcpTransportOptions {
   approvedEndpointOrigins: readonly string[];
   authProvider: RobinhoodAuthProvider;
   clientFactory?: McpClientFactory;
+  fetch?: typeof fetch;
 }
 
-function createMcpSdkClient({ endpoint, authProvider }: McpClientFactoryInput): McpSdkClient {
+function createMcpSdkClient({ endpoint, authProvider, fetch }: McpClientFactoryInput): McpSdkClient {
   const client = new Client({ name: 'aurum-portfolio', version: '0.1.0' });
-  const transport = new StreamableHTTPClientTransport(endpoint, { authProvider });
+  const transport = new StreamableHTTPClientTransport(endpoint, {
+    authProvider,
+    ...(fetch ? { fetch } : {}),
+  });
 
   return {
     connect: () => client.connect(transport),
@@ -133,6 +138,7 @@ function providerFailure(error: unknown): ProviderBoundaryError {
 export class SdkMcpTransport implements McpTransport {
   private readonly endpoint: URL;
   private readonly clientFactory: McpClientFactory;
+  private readonly fetch: typeof fetch | undefined;
   private client: McpSdkClient | undefined;
   private connection: Promise<McpSdkClient> | undefined;
 
@@ -143,6 +149,7 @@ export class SdkMcpTransport implements McpTransport {
     );
     this.clientFactory = options.clientFactory ?? createMcpSdkClient;
     this.authProvider = options.authProvider;
+    this.fetch = options.fetch;
   }
 
   private readonly authProvider: RobinhoodAuthProvider;
@@ -200,6 +207,7 @@ export class SdkMcpTransport implements McpTransport {
       client = this.clientFactory({
         endpoint: this.endpoint,
         authProvider: this.authProvider,
+        ...(this.fetch ? { fetch: this.fetch } : {}),
       });
       await client.connect();
       const advertised = new Set((await client.listTools()).tools.map((tool) => tool.name));

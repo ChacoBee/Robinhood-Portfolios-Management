@@ -29,6 +29,8 @@ export * from './robinhood/errors';
 export * from './robinhood/mapper';
 export * from './robinhood/oauth-crypto';
 export * from './robinhood/oauth-store';
+export * from './robinhood/oauth-provider';
+export * from './robinhood/connect-cli';
 export * from './robinhood/read-methods';
 export * from './robinhood/schemas';
 export * from './robinhood/vault';

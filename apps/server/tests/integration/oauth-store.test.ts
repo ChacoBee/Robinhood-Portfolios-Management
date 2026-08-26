@@ -46,7 +46,7 @@ describe('Robinhood OAuth credential store', () => {
     )).resolves.toMatchObject({ rows: [{ count: 0 }] });
   });
 
-  it('persists client information and tokens only as encrypted envelopes', async () => {
+  it('persists client information and tokens as enrolling until verification marks them connected', async () => {
     const { database, ownerId, store } = await createStore();
     const clientInformation = { clientId: 'synthetic-client' };
     const tokens = { accessToken: 'synthetic-access', refreshToken: 'synthetic-refresh' };
@@ -57,8 +57,10 @@ describe('Robinhood OAuth credential store', () => {
     expect(await store.load()).toMatchObject({
       clientInformation,
       tokens,
-      connectionState: 'connected',
+      connectionState: 'enrolling',
     });
+    await store.markConnected();
+    await expect(store.load()).resolves.toMatchObject({ connectionState: 'connected' });
     const rows = await database.client.query<{
       client_information: string | null;
       token_set: string | null;
@@ -76,6 +78,7 @@ describe('Robinhood OAuth credential store', () => {
     const { database, ownerId, store } = await createStore();
     await store.saveClientInformation({ clientId: 'synthetic-client' });
     await store.saveTokens({ refreshToken: 'synthetic-first' });
+    await store.markConnected();
 
     await store.saveTokens({ refreshToken: 'synthetic-rotated' });
 
@@ -89,6 +92,20 @@ describe('Robinhood OAuth credential store', () => {
        where user_id = $1 and provider = 'robinhood'`,
       [ownerId],
     )).resolves.toMatchObject({ rows: [{ count: 1 }] });
+  });
+
+  it('returns a previously verified credential to enrolling when client registration changes', async () => {
+    const { store } = await createStore();
+    await store.saveClientInformation({ clientId: 'synthetic-client' });
+    await store.saveTokens({ refreshToken: 'synthetic-token' });
+    await store.markConnected();
+
+    await store.saveClientInformation({ clientId: 'newly-registered-client' });
+
+    await expect(store.load()).resolves.toMatchObject({
+      clientInformation: { clientId: 'newly-registered-client' },
+      connectionState: 'enrolling',
+    });
   });
 
   it('records a heartbeat without decrypting or replacing credentials', async () => {

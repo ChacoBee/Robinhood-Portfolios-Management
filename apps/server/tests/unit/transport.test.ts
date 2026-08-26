@@ -18,6 +18,7 @@ interface AdapterClient {
 interface AdapterFactoryInput {
   endpoint: URL;
   authProvider: unknown;
+  fetch?: typeof fetch;
 }
 
 type AdapterFactory = (input: AdapterFactoryInput) => AdapterClient;
@@ -27,6 +28,7 @@ type SdkMcpTransportConstructor = new (options: {
   approvedEndpointOrigins: readonly string[];
   authProvider: unknown;
   clientFactory: AdapterFactory;
+  fetch?: typeof fetch;
 }) => {
   connect(): Promise<void>;
   call<T>(tool: string, args: Readonly<Record<string, unknown>>): Promise<T>;
@@ -144,6 +146,27 @@ describe('SDK MCP transport lifecycle', () => {
     await transport.close();
 
     expect(client.close).toHaveBeenCalledOnce();
+  });
+
+  it('passes an injected fetch wrapper to the official SDK transport', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => ({ structuredContent: { data: { results: [] } } })),
+      close: vi.fn(async () => undefined),
+    };
+    const fetchWrapper = vi.fn<typeof fetch>();
+    const factory = vi.fn<AdapterFactory>(() => client);
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    await new SdkMcpTransport({ ...options(factory), fetch: fetchWrapper }).connect();
+
+    expect(factory).toHaveBeenCalledWith(
+      expect.objectContaining({ fetch: fetchWrapper }),
+    );
   });
 
   it('rejects a result without structuredContent.data', async () => {

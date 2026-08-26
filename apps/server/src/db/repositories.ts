@@ -156,6 +156,7 @@ export interface OAuthCredentialRepository {
     provider: 'robinhood',
     tokenSet: string,
   ): Promise<boolean>;
+  markConnected(ownerId: string, provider: 'robinhood'): Promise<boolean>;
   markHeartbeat(ownerId: string, provider: 'robinhood'): Promise<void>;
   disconnect(ownerId: string, provider: 'robinhood'): Promise<void>;
 }
@@ -939,10 +940,7 @@ function createOAuthCredentialRepository(
          ) values ($1, $2, $3, $4, 'enrolling')
          on conflict (user_id, provider) do update set
            client_information = excluded.client_information,
-           connection_state = case
-             when robinhood_oauth_credentials.token_set is null then 'enrolling'
-             else 'connected'
-           end,
+           connection_state = 'enrolling',
            updated_at = now()`,
         [randomUUID(), ownerId, provider, clientInformation],
       );
@@ -952,7 +950,6 @@ function createOAuthCredentialRepository(
       const result = await database.query<{ id: string }>(
         `update robinhood_oauth_credentials
          set token_set = $3,
-           connection_state = 'connected',
            token_updated_at = now(),
            updated_at = now()
          where user_id = $1
@@ -960,6 +957,20 @@ function createOAuthCredentialRepository(
            and client_information is not null
          returning id`,
         [ownerId, provider, tokenSet],
+      );
+      return result.rows.length === 1;
+    },
+
+    async markConnected(ownerId, provider) {
+      const result = await database.query<{ id: string }>(
+        `update robinhood_oauth_credentials
+         set connection_state = 'connected', updated_at = now()
+         where user_id = $1
+           and provider = $2
+           and client_information is not null
+           and token_set is not null
+         returning id`,
+        [ownerId, provider],
       );
       return result.rows.length === 1;
     },
