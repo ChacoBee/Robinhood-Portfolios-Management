@@ -17,7 +17,12 @@ describe('browser content security policy', () => {
       clerkFrontendApiOrigin: 'https://clerk.example.test',
     });
 
-    expect(policy).toContain('https://clerk.example.test');
+    expect(policy).toContain("script-src 'nonce-nonce-2' 'strict-dynamic' https://clerk.example.test https://challenges.cloudflare.com https://*.protect.clerk.com");
+    expect(policy).toContain("connect-src 'self' https://clerk.example.test https://*.protect.clerk.com:*");
+    expect(policy).toContain("img-src 'self' data: https://img.clerk.com");
+    expect(policy).toContain("frame-src 'self' https://challenges.cloudflare.com https://*.protect.clerk.com");
+    expect(policy).not.toContain(' ws:');
+    expect(policy).not.toContain(' wss:');
     expect(policy).not.toContain('*.clerk.accounts.dev');
   });
 });

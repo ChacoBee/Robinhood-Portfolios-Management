@@ -7,20 +7,20 @@ export function createBrowserContentSecurityPolicy({
   nonce,
   clerkFrontendApiOrigin,
 }: Readonly<{ mode: 'demo' | 'connected'; nonce: string; clerkFrontendApiOrigin?: string }>): string {
-  if (mode === 'connected' && !clerkFrontendApiOrigin) throw new Error('Connected mode requires a valid CLERK_FRONTEND_API_URL.');
-  const clerk = mode === 'connected' ? ` ${clerkFrontendApiOrigin}` : '';
+  if (mode === 'connected' && !clerkFrontendApiOrigin) throw new Error('Connected mode requires a valid Clerk FAPI origin.');
+  const fapi = mode === 'connected' ? clerkFrontendApiOrigin : null;
   return [
     "default-src 'self'",
     "base-uri 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "object-src 'none'",
-    `img-src 'self' data:${clerk}`,
+    `img-src 'self' data:${mode === 'connected' ? ' https://img.clerk.com' : ''}`,
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
-    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
-    `connect-src 'self' ws: wss:${clerk}`,
-    `frame-src 'self'${clerk}`,
+    `script-src 'nonce-${nonce}' 'strict-dynamic'${fapi ? ` ${fapi} https://challenges.cloudflare.com https://*.protect.clerk.com` : ''}`,
+    `connect-src 'self'${fapi ? ` ${fapi} https://*.protect.clerk.com:*` : ''}`,
+    `frame-src 'self'${fapi ? ' https://challenges.cloudflare.com https://*.protect.clerk.com' : ''}`,
     "worker-src 'self' blob:",
   ].join('; ');
 }

@@ -1,5 +1,5 @@
 import AxeBuilder from '@axe-core/playwright';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 const routes = [
   '/',
@@ -16,6 +16,13 @@ const routes = [
   '/settings',
 ] as const;
 
+async function gotoHydrated(page: Page, route: string) {
+  const response = await page.goto(route);
+  expect(response?.ok()).toBe(true);
+  await expect(page.locator('body')).toHaveAttribute('data-aurum-hydrated', 'true');
+  return response;
+}
+
 test.describe('Aurum dashboard', () => {
   test('serves browser security headers on rendered routes', async ({ request }) => {
     const response = await request.get('/');
@@ -29,8 +36,7 @@ test.describe('Aurum dashboard', () => {
 
   for (const route of routes) {
     test(`${route} renders a labeled synthetic source`, async ({ page }) => {
-      const response = await page.goto(route);
-      expect(response?.ok()).toBe(true);
+      await gotoHydrated(page, route);
       await expect(page.getByText('Synthetic Demo').first()).toBeVisible();
       const scan = await new AxeBuilder({ page }).analyze();
       expect(scan.violations.filter((item) => ['serious', 'critical'].includes(item.impact ?? ''))).toEqual([]);
@@ -39,7 +45,7 @@ test.describe('Aurum dashboard', () => {
 
   test('mobile navigation exposes four direct destinations and the exact More menu', async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto('/holdings');
+    await gotoHydrated(page, '/holdings');
 
     const navigation = page.getByRole('navigation', { name: 'Mobile primary' });
     await expect(navigation.getByRole('link', { name: 'Overview' })).toBeVisible();
@@ -56,16 +62,16 @@ test.describe('Aurum dashboard', () => {
   });
 
   test('screen privacy survives in-app navigation for the browser session', async ({ page }) => {
-    await page.goto('/');
+    await gotoHydrated(page, '/');
     await page.getByRole('button', { name: 'Hide financial values' }).click();
     await expect(page.getByText('$128,640.25').first()).toBeHidden();
-    await page.goto('/holdings');
+    await gotoHydrated(page, '/holdings');
     await expect(page.getByText('$117,140.25')).toBeHidden();
     await expect(page.getByText('••••••').first()).toBeVisible();
   });
 
   test('safe Demo import requires preview and explicit confirmation', async ({ page }) => {
-    await page.goto('/activity/imports');
+    await gotoHydrated(page, '/activity/imports');
     await page.getByRole('button', { name: 'Load synthetic fixture' }).click();
     await expect(page.getByRole('region', { name: 'Import preview rows' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Confirm 2 selected' })).toBeEnabled();
@@ -74,11 +80,11 @@ test.describe('Aurum dashboard', () => {
   });
 
   test('alert evidence and destructive settings gates are interactive', async ({ page }) => {
-    await page.goto('/alerts');
+    await gotoHydrated(page, '/alerts');
     await page.getByRole('button', { name: 'Evidence' }).first().click();
     await expect(page.getByText(/Synthetic top-two concentration exceeded 30%/)).toBeVisible();
 
-    await page.goto('/settings');
+    await gotoHydrated(page, '/settings');
     const deletion = page.getByRole('button', { name: 'Preview deletion' });
     await expect(deletion).toBeDisabled();
     await page.getByLabel('Type DELETE SYNTHETIC DEMO').fill('DELETE SYNTHETIC DEMO');
@@ -89,7 +95,7 @@ test.describe('Aurum dashboard', () => {
     for (const width of [360, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       for (const route of ['/', '/holdings', '/activity/imports', '/settings']) {
-        await page.goto(route);
+        await gotoHydrated(page, route);
         const overflow = await page.evaluate(
           () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
         );

@@ -1,22 +1,10 @@
+import { parsePublishableKey } from '@clerk/shared/keys';
+
 export type ClerkPublicConfig = Readonly<{
   publishableKey: string;
   frontendApiOrigin: string;
   redirectOrigin: string;
 }>;
-
-function exactHttpsOrigin(value: string | undefined, name: string): string {
-  if (!value) throw new Error(`Connected mode requires ${name}.`);
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
-    throw new Error(`Connected mode requires a valid ${name}.`);
-  }
-  if (url.protocol !== 'https:' || url.username || url.password || url.origin !== value) {
-    throw new Error(`Connected mode requires a valid ${name}.`);
-  }
-  return url.origin;
-}
 
 function exactWebOrigin(value: string | undefined, nodeEnvironment: string | undefined): string {
   if (!value) throw new Error('Connected mode requires WEB_ORIGIN.');
@@ -35,7 +23,17 @@ function exactWebOrigin(value: string | undefined, nodeEnvironment: string | und
 }
 
 export function isValidClerkPublishableKey(value: string | undefined): value is string {
-  return typeof value === 'string' && /^pk_(?:test|live)_[A-Za-z0-9_-]{10,}$/.test(value);
+  return parsePublishableKey(value) !== null;
+}
+
+function frontendApiOrigin(publishableKey: string): string {
+  const parsed = parsePublishableKey(publishableKey);
+  if (!parsed) throw new Error('Connected mode requires a valid Clerk publishable key.');
+  const origin = new URL(`https://${parsed.frontendApi}`);
+  if (origin.protocol !== 'https:' || origin.username || origin.password || origin.origin !== `https://${parsed.frontendApi}`) {
+    throw new Error('Connected mode requires a valid Clerk publishable key.');
+  }
+  return origin.origin;
 }
 
 export function readClerkPublicConfig(
@@ -46,7 +44,7 @@ export function readClerkPublicConfig(
   }
   return {
     publishableKey: environment.CLERK_PUBLISHABLE_KEY,
-    frontendApiOrigin: exactHttpsOrigin(environment.CLERK_FRONTEND_API_URL, 'CLERK_FRONTEND_API_URL'),
+    frontendApiOrigin: frontendApiOrigin(environment.CLERK_PUBLISHABLE_KEY),
     redirectOrigin: exactWebOrigin(environment.WEB_ORIGIN, environment.NODE_ENV),
   };
 }

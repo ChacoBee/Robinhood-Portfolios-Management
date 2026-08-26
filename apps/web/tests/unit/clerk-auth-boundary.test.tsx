@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
+import { buildPublishableKey } from '@clerk/shared/keys';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import SignInPage from '../../app/sign-in/[[...sign-in]]/page';
 import { ClerkAuthBoundary } from '../../components/auth/ClerkAuthBoundary';
 
@@ -9,8 +10,11 @@ const clerk = vi.hoisted(() => ({
   UserButton: vi.fn(() => <div data-testid="clerk-user-button" />),
   useAuth: vi.fn(),
 }));
+const router = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }));
+const publicKey = buildPublishableKey('fixture.clerk.accounts.dev');
 
 vi.mock('@clerk/react', () => clerk);
+vi.mock('next/navigation', () => ({ usePathname: () => window.location.pathname, useRouter: () => router }));
 
 vi.mock('../../components/app-shell/DashboardShell', () => ({
   DashboardShell: ({ children, userControl }: { children: React.ReactNode; userControl?: React.ReactNode }) => (
@@ -19,6 +23,13 @@ vi.mock('../../components/app-shell/DashboardShell', () => ({
 }));
 
 describe('ClerkAuthBoundary', () => {
+  beforeEach(() => {
+    clerk.ClerkProvider.mockClear();
+    clerk.SignIn.mockClear();
+    clerk.UserButton.mockClear();
+    router.push.mockClear();
+    router.replace.mockClear();
+  });
   it('keeps demo mode independent of Clerk and renders the dashboard shell', () => {
     render(
       <ClerkAuthBoundary apiBaseUrl="" mode="demo">
@@ -42,7 +53,7 @@ describe('ClerkAuthBoundary', () => {
   it('shows an accessible loading state without shell content while Clerk initializes', async () => {
     clerk.useAuth.mockReturnValue({ isLoaded: false, isSignedIn: false });
     render(
-      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey="pk_test_synthetic_public_identity_12345" redirectOrigin="https://portfolio.example.test">
+      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey={publicKey} redirectOrigin="https://portfolio.example.test">
         <main>dashboard</main>
       </ClerkAuthBoundary>,
     );
@@ -55,12 +66,12 @@ describe('ClerkAuthBoundary', () => {
     clerk.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
     window.history.replaceState({}, '', '/sign-in/email-code');
     render(
-      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey="pk_test_synthetic_public_identity_12345" redirectOrigin="https://portfolio.example.test">
+      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey={publicKey} redirectOrigin="https://portfolio.example.test">
         <main>dashboard</main>
       </ClerkAuthBoundary>,
     );
 
-    expect(await screen.findByTestId('clerk-sign-in')).toBeInTheDocument();
+    await screen.findByTestId('clerk-provider');
     expect(screen.queryByTestId('dashboard-shell')).not.toBeInTheDocument();
     expect(clerk.SignIn).toHaveBeenCalledWith(expect.objectContaining({
       path: '/sign-in', routing: 'path', transferable: false, withSignUp: false,
@@ -71,13 +82,13 @@ describe('ClerkAuthBoundary', () => {
     clerk.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: false });
     window.history.replaceState({}, '', '/settings');
     render(
-      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey="pk_test_synthetic_public_identity_12345" redirectOrigin="https://portfolio.example.test">
+      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey={publicKey} redirectOrigin="https://portfolio.example.test">
         <main>dashboard</main>
       </ClerkAuthBoundary>,
     );
 
-    expect(await screen.findByTestId('clerk-sign-in')).toBeInTheDocument();
-    expect(window.location.pathname).toBe('/sign-in');
+    await screen.findByTestId('clerk-provider');
+    expect(router.replace).toHaveBeenCalledWith('/sign-in');
     expect(screen.queryByTestId('dashboard-shell')).not.toBeInTheDocument();
   });
 
@@ -85,7 +96,7 @@ describe('ClerkAuthBoundary', () => {
     clerk.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
     window.history.replaceState({}, '', '/');
     render(
-      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" nonce="request-nonce" publishableKey="pk_test_synthetic_public_identity_12345" redirectOrigin="https://portfolio.example.test">
+      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" nonce="request-nonce" publishableKey={publicKey} redirectOrigin="https://portfolio.example.test">
         <main>dashboard</main>
       </ClerkAuthBoundary>,
     );
@@ -93,11 +104,31 @@ describe('ClerkAuthBoundary', () => {
     expect(await screen.findByTestId('dashboard-shell')).toHaveTextContent('dashboard');
     expect(screen.getByTestId('clerk-user-button')).toBeInTheDocument();
     expect(clerk.ClerkProvider).toHaveBeenCalledWith(expect.objectContaining({
-      publishableKey: 'pk_test_synthetic_public_identity_12345',
+      publishableKey: publicKey,
       signInUrl: '/sign-in', telemetry: false,
-      nonce: 'request-nonce', dynamic: true,
+      nonce: 'request-nonce',
       allowedRedirectOrigins: ['https://portfolio.example.test'],
     }), undefined);
+    const providerProps = clerk.ClerkProvider.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(providerProps).not.toHaveProperty('dynamic');
+    (providerProps.routerPush as (to: string) => void)('/sign-in/email-code');
+    (providerProps.routerReplace as (to: string) => void)('/');
+    expect(router.push).toHaveBeenCalledWith('/sign-in/email-code');
+    expect(router.replace).toHaveBeenCalledWith('/');
+  });
+
+  it('replaces the sign-in route with the dashboard when an owner is already signed in', async () => {
+    clerk.useAuth.mockReturnValue({ isLoaded: true, isSignedIn: true });
+    window.history.replaceState({}, '', '/sign-in');
+    render(
+      <ClerkAuthBoundary apiBaseUrl="/api/aurum" mode="connected" publishableKey={publicKey} redirectOrigin="https://portfolio.example.test">
+        <main>dashboard</main>
+      </ClerkAuthBoundary>,
+    );
+
+    await screen.findByTestId('clerk-provider');
+    expect(router.replace).toHaveBeenCalledWith('/');
+    expect(screen.queryByTestId('dashboard-shell')).not.toBeInTheDocument();
   });
 
   it('uses the optional catch-all sign-in page without a dashboard shell', () => {
