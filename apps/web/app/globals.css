@@ -1,26 +1,26 @@
 @import 'tailwindcss';
 
 :root {
-  --canvas: #090806;
-  --canvas-raised: #0e0c09;
-  --panel: #14110d;
-  --panel-strong: #1b1711;
-  --panel-soft: #211c14;
-  --border: #30291d;
-  --border-bright: #4c402b;
-  --gold: #d8b86a;
-  --gold-bright: #f2daa0;
-  --gold-deep: #9f7c34;
-  --text: #f5f0e7;
-  --muted: #a9a095;
-  --muted-strong: #c4bbad;
-  --positive: #61d39b;
-  --negative: #f27d78;
-  --amber: #e89a4a;
-  --focus: #ffe7a8;
-  --rail-width: 236px;
-  --radius-xl: 24px;
-  --radius-lg: 18px;
+  --canvas: #08090b;
+  --canvas-raised: #0c0e12;
+  --panel: #12151a;
+  --panel-strong: #171b22;
+  --panel-soft: #1b2028;
+  --border: #252b35;
+  --border-bright: #343c49;
+  --gold: #e2b93f;
+  --gold-bright: #f2cf62;
+  --gold-deep: #a98419;
+  --text: #f4f1e8;
+  --muted: #737d8d;
+  --muted-strong: #a4acb9;
+  --positive: #2ccf9b;
+  --negative: #ff6868;
+  --amber: #e3a84b;
+  --focus: #f2cf62;
+  --rail-width: 208px;
+  --radius-xl: 14px;
+  --radius-lg: 12px;
   color-scheme: dark;
 }
 
@@ -48,9 +48,7 @@ body {
   min-height: 100vh;
   margin: 0;
   overflow-x: hidden;
-  background:
-    radial-gradient(circle at 72% -10%, rgb(216 184 106 / 10%), transparent 28rem),
-    var(--canvas);
+  background: var(--canvas);
   color: var(--text);
   font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -94,10 +92,10 @@ a:focus-visible {
   display: flex;
   width: var(--rail-width);
   flex-direction: column;
-  padding: 28px 18px 22px;
+  padding: 22px 14px 14px;
   border-right: 1px solid var(--border);
-  background: rgb(11 9 7 / 92%);
-  backdrop-filter: blur(18px);
+  background: var(--canvas-raised);
+  backdrop-filter: none;
 }
 
 .brand {
@@ -117,11 +115,11 @@ a:focus-visible {
   flex: 0 0 42px;
   place-items: center;
   border: 1px solid var(--border-bright);
-  border-radius: 14px;
-  background: linear-gradient(145deg, #3b2f1b, #17120c);
-  box-shadow: inset 0 1px rgb(255 255 255 / 10%), 0 10px 24px rgb(0 0 0 / 28%);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: none;
   color: var(--gold-bright);
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: 1.35rem;
   font-weight: 700;
 }
@@ -146,17 +144,17 @@ a:focus-visible {
 .side-navigation {
   display: grid;
   gap: 5px;
-  margin-top: 44px;
+  margin-top: 32px;
 }
 
 .nav-link {
   display: flex;
-  min-height: 46px;
+  min-height: 40px;
   align-items: center;
   gap: 12px;
   padding: 0 11px;
   border: 1px solid transparent;
-  border-radius: 13px;
+  border-radius: 9px;
   color: var(--muted-strong);
   font-size: 0.88rem;
   font-weight: 520;
@@ -170,21 +168,15 @@ a:focus-visible {
 }
 
 .nav-link[aria-current='page'] {
-  border-color: #3b3121;
-  background: linear-gradient(90deg, rgb(216 184 106 / 14%), rgb(216 184 106 / 4%));
+  border-color: rgb(226 185 63 / 30%);
+  background: rgb(226 185 63 / 10%);
   color: var(--gold-bright);
 }
 
-.nav-glyph {
-  display: grid;
-  width: 25px;
-  height: 25px;
-  place-items: center;
-  border: 1px solid currentColor;
-  border-radius: 8px;
-  font-family: var(--font-geist-mono);
-  font-size: 0.68rem;
-  opacity: 0.72;
+.nav-icon {
+  width: 18px;
+  height: 18px;
+  flex: 0 0 18px;
 }
 
 .rail-connection {
@@ -194,8 +186,18 @@ a:focus-visible {
   margin-top: auto;
   padding: 14px 10px;
   border: 1px solid var(--border);
-  border-radius: 14px;
+  border-radius: 12px;
   background: var(--panel);
+}
+
+.rail-read-only {
+  margin: 8px 0 0;
+  padding: 8px;
+  border: 1px solid rgb(226 185 63 / 28%);
+  border-radius: 8px;
+  color: var(--gold-bright);
+  font-size: .66rem;
+  text-align: center;
 }
 
 .rail-connection strong {
@@ -230,13 +232,13 @@ a:focus-visible {
   top: 0;
   z-index: 15;
   display: flex;
-  min-height: 78px;
+  min-height: 68px;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
-  padding: 12px clamp(22px, 4vw, 58px);
-  border-bottom: 1px solid rgb(48 41 29 / 75%);
-  background: rgb(9 8 6 / 82%);
+  padding: 10px clamp(20px, 2.4vw, 32px);
+  border-bottom: 1px solid rgb(37 43 53 / 75%);
+  background: rgb(8 9 11 / 92%);
   backdrop-filter: blur(20px);
 }
 
@@ -330,8 +332,8 @@ a:focus-visible {
 }
 
 .avatar-button {
-  border-color: #5e4a2b;
-  background: linear-gradient(145deg, #49371d, #231a10);
+  border-color: rgb(226 185 63 / 30%);
+  background: rgb(226 185 63 / 10%);
   color: var(--gold-bright);
   font-size: 0.72rem;
   font-weight: 750;
@@ -772,7 +774,7 @@ a:focus-visible {
 .insight-card h2 {
   max-width: 330px;
   margin-top: 8px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: clamp(1.35rem, 2.4vw, 1.9rem);
   font-weight: 500;
   line-height: 1.12;
@@ -1199,7 +1201,7 @@ a:focus-visible {
 
 .page-heading h1 {
   margin: 7px 0 8px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: clamp(2rem, 4vw, 3.4rem);
   font-weight: 500;
   letter-spacing: -0.045em;
@@ -1337,7 +1339,7 @@ a:focus-visible {
   border-radius: 14px;
   background: rgb(216 184 106 / 10%);
   color: var(--gold-bright);
-  font-family: Georgia, serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 .account-card h3 {
@@ -2335,7 +2337,7 @@ a:focus-visible {
 
 .import-dropzone h3 {
   margin: 18px 0 8px;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: 1.35rem;
   font-weight: 500;
 }
@@ -2521,13 +2523,13 @@ a:focus-visible {
   border-radius: 17px;
   background: rgb(216 184 106 / 9%);
   color: var(--gold-bright);
-  font-family: Georgia, serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
 }
 
 .empty-state h2,
 .error-state h1 {
   margin: 18px 0 8px;
-  font-family: Georgia, serif;
+  font-family: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   font-size: 1.65rem;
   font-weight: 500;
 }

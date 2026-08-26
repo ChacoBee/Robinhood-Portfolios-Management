@@ -23,6 +23,29 @@ async function gotoPage(page: Page, route: string) {
 }
 
 test.describe('Aurum dashboard', () => {
+  test('desktop shell uses the approved Aurum visual tokens and geometry', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await gotoPage(page, '/');
+
+    const tokens = await page.evaluate(() => {
+      const root = getComputedStyle(document.documentElement);
+      return {
+        canvas: root.getPropertyValue('--canvas').trim().toUpperCase(),
+        panel: root.getPropertyValue('--panel').trim().toUpperCase(),
+        border: root.getPropertyValue('--border').trim().toUpperCase(),
+        gold: root.getPropertyValue('--gold').trim().toUpperCase(),
+        rail: root.getPropertyValue('--rail-width').trim(),
+        radius: root.getPropertyValue('--radius-lg').trim(),
+      };
+    });
+    expect(tokens).toEqual({
+      canvas: '#08090B', panel: '#12151A', border: '#252B35',
+      gold: '#E2B93F', rail: '208px', radius: '12px',
+    });
+    await expect(page.locator('.side-rail')).toHaveCSS('width', '208px');
+    await expect(page.locator('.global-header')).toHaveCSS('min-height', '68px');
+  });
+
   test('serves browser security headers on rendered routes', async ({ request }) => {
     const response = await request.get('/');
     expect(response.status()).toBe(200);
