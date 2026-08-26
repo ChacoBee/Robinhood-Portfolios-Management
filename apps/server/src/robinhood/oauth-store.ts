@@ -1,5 +1,5 @@
 import type { OAuthCredentialRepository } from '../db/repositories';
-import { AesGcmOAuthCrypto } from './oauth-crypto';
+import { AesGcmOAuthCrypto, OAuthCredentialError } from './oauth-crypto';
 
 const provider = 'robinhood' as const;
 
@@ -62,11 +62,14 @@ export class RobinhoodOAuthStore {
   }
 
   async saveTokens(tokens: Record<string, unknown>): Promise<void> {
-    await this.credentials.saveTokens(
+    const saved = await this.credentials.saveTokens(
       this.ownerId,
       provider,
       this.crypto.seal({ ownerId: this.ownerId, provider, recordKind: 'tokens' }, tokens),
     );
+    if (!saved) {
+      throw new OAuthCredentialError('oauth_credentials_incomplete');
+    }
   }
 
   async markHeartbeat(): Promise<void> {

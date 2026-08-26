@@ -43,4 +43,16 @@ describe('Robinhood OAuth credential encryption', () => {
     expect(() => crypto.open(context, tampered)).toThrow(OAuthCredentialError);
     expect(() => crypto.open(context, tampered)).toThrow('oauth_credentials_invalid');
   });
+
+  it.each([
+    ['an appended non-base64url character', (envelope: string) => `${envelope}!`],
+    ['a noncanonical padding suffix', (envelope: string) => `${envelope}=`],
+  ])('rejects %s with a safe error code', (_caseName, mutate) => {
+    const crypto = new AesGcmOAuthCrypto(encryptionKey);
+    const envelope = crypto.seal(context, { tokenType: 'synthetic' });
+
+    expect(() => crypto.open(context, mutate(envelope))).toThrow(
+      'oauth_credentials_invalid',
+    );
+  });
 });

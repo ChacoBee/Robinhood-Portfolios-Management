@@ -155,7 +155,7 @@ export interface OAuthCredentialRepository {
     ownerId: string,
     provider: 'robinhood',
     tokenSet: string,
-  ): Promise<void>;
+  ): Promise<boolean>;
   markHeartbeat(ownerId: string, provider: 'robinhood'): Promise<void>;
   disconnect(ownerId: string, provider: 'robinhood'): Promise<void>;
 }
@@ -949,17 +949,19 @@ function createOAuthCredentialRepository(
     },
 
     async saveTokens(ownerId, provider, tokenSet) {
-      await database.query(
-        `insert into robinhood_oauth_credentials (
-           id, user_id, provider, token_set, connection_state, token_updated_at
-         ) values ($1, $2, $3, $4, 'connected', now())
-         on conflict (user_id, provider) do update set
-           token_set = excluded.token_set,
+      const result = await database.query<{ id: string }>(
+        `update robinhood_oauth_credentials
+         set token_set = $3,
            connection_state = 'connected',
            token_updated_at = now(),
-           updated_at = now()`,
-        [randomUUID(), ownerId, provider, tokenSet],
+           updated_at = now()
+         where user_id = $1
+           and provider = $2
+           and client_information is not null
+         returning id`,
+        [ownerId, provider, tokenSet],
       );
+      return result.rows.length === 1;
     },
 
     async markHeartbeat(ownerId, provider) {

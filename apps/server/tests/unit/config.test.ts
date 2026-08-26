@@ -81,6 +81,15 @@ describe('environment guards', () => {
     ).toEqual({ APP_MODE: 'demo', NODE_ENV: 'test' });
   });
 
+  it('requires independent decoded encryption keys in connected mode', () => {
+    expect(() =>
+      parseEnvironment({
+        ...connectedEnvironment,
+        ROBINHOOD_OAUTH_ENCRYPTION_KEY: accountReferenceKey.slice(0, -1),
+      }),
+    ).toThrow(/ROBINHOOD_OAUTH_ENCRYPTION_KEY/);
+  });
+
   it('requires PostgreSQL and verified TLS in connected production', () => {
     expect(() =>
       parseEnvironment({

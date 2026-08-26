@@ -13,10 +13,23 @@ export interface OAuthEncryptionContext {
 }
 
 export class OAuthCredentialError extends Error {
-  constructor(readonly code: 'oauth_credentials_invalid') {
+  constructor(
+    readonly code: 'oauth_credentials_invalid' | 'oauth_credentials_incomplete',
+  ) {
     super(code);
     this.name = 'OAuthCredentialError';
   }
+}
+
+function decodeCanonicalBase64url(value: string): Buffer {
+  if (!/^[A-Za-z0-9_-]+$/.test(value)) {
+    throw new Error('invalid base64url');
+  }
+  const decoded = Buffer.from(value, 'base64url');
+  if (decoded.length === 0 || decoded.toString('base64url') !== value) {
+    throw new Error('noncanonical base64url');
+  }
+  return decoded;
 }
 
 function additionalAuthenticatedData(context: OAuthEncryptionContext): Buffer {
@@ -58,9 +71,9 @@ export class AesGcmOAuthCrypto {
       if (version !== 'v1' || !noncePart || !ciphertextPart || !tagPart || extra) {
         throw new Error('invalid envelope');
       }
-      const nonce = Buffer.from(noncePart, 'base64url');
-      const ciphertext = Buffer.from(ciphertextPart, 'base64url');
-      const tag = Buffer.from(tagPart, 'base64url');
+      const nonce = decodeCanonicalBase64url(noncePart);
+      const ciphertext = decodeCanonicalBase64url(ciphertextPart);
+      const tag = decodeCanonicalBase64url(tagPart);
       if (nonce.length !== 12 || tag.length !== 16 || ciphertext.length === 0) {
         throw new Error('invalid envelope');
       }

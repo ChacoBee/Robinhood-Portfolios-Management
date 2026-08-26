@@ -94,6 +94,17 @@ const ConnectedEnvironmentSchema = z.object({
       message: 'Production DATABASE_URL must set sslmode=verify-full',
     });
   }
+  if (
+    Buffer.from(value.ACCOUNT_REFERENCE_ENCRYPTION_KEY, 'base64').equals(
+      Buffer.from(value.ROBINHOOD_OAUTH_ENCRYPTION_KEY, 'base64'),
+    )
+  ) {
+    context.addIssue({
+      code: 'custom',
+      path: ['ROBINHOOD_OAUTH_ENCRYPTION_KEY'],
+      message: 'ROBINHOOD_OAUTH_ENCRYPTION_KEY must differ from ACCOUNT_REFERENCE_ENCRYPTION_KEY',
+    });
+  }
 });
 
 export const EnvironmentSchema = z.discriminatedUnion('APP_MODE', [

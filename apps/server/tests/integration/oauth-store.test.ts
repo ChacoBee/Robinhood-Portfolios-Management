@@ -31,6 +31,21 @@ async function createStore() {
 }
 
 describe('Robinhood OAuth credential store', () => {
+  it('does not create a connected grant from tokens without client information', async () => {
+    const { database, ownerId, store } = await createStore();
+
+    await expect(store.saveTokens({ refreshToken: 'synthetic-rotated' })).rejects.toThrow(
+      'oauth_credentials_incomplete',
+    );
+
+    await expect(store.load()).resolves.toBeNull();
+    await expect(database.client.query<{ count: number }>(
+      `select count(*) as count from robinhood_oauth_credentials
+       where user_id = $1 and provider = 'robinhood'`,
+      [ownerId],
+    )).resolves.toMatchObject({ rows: [{ count: 0 }] });
+  });
+
   it('persists client information and tokens only as encrypted envelopes', async () => {
     const { database, ownerId, store } = await createStore();
     const clientInformation = { clientId: 'synthetic-client' };
@@ -92,6 +107,7 @@ describe('Robinhood OAuth credential store', () => {
 
   it('removes the owner provider credential row when disconnected', async () => {
     const { database, ownerId, store } = await createStore();
+    await store.saveClientInformation({ clientId: 'synthetic-client' });
     await store.saveTokens({ refreshToken: 'synthetic-rotated' });
 
     await store.disconnect();
