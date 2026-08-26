@@ -67,4 +67,31 @@ describe('Clerk owner verifier', () => {
     });
     await expect(verifier.verify(new Request(`${origin}/v1/dashboard`))).rejects.toThrow('owner_user_mismatch');
   });
+
+  it('constructs the Clerk client with only the configured server keys', () => {
+    const createClient = vi.fn(() => ({ authenticateRequest: vi.fn(), users: { getUser: vi.fn() } }));
+    createClerkOwnerVerifier({ secretKey: 'synthetic-secret-key', publishableKey: 'synthetic-public-key', webOrigin: origin, issuer, createClient });
+    expect(createClient).toHaveBeenCalledWith({ secretKey: 'synthetic-secret-key', publishableKey: 'synthetic-public-key' });
+  });
+
+  it.each([
+    ['unauthenticated request', 'authentication_required', { isAuthenticated: false, toAuth: () => ({}) }],
+    ['missing user', 'authentication_required', { isAuthenticated: true, toAuth: () => ({ sessionId: 'sess', sessionClaims: { iss: issuer, azp: origin, iat: 1_725_000_000 } }) }],
+    ['missing primary email', 'verified_email_required', { isAuthenticated: true, toAuth: () => ({ userId: 'user_owner123', sessionId: 'sess', sessionClaims: { iss: issuer, azp: origin, iat: 1_725_000_000 } }) }],
+  ])('rejects %s', async (_label, expected, response) => {
+    const verifier = createClerkOwnerVerifier({
+      secretKey: 'synthetic-secret-key', publishableKey: 'synthetic-public-key', webOrigin: origin, issuer,
+      createClient: () => ({ authenticateRequest: async () => response, users: { getUser: async () => ({ primaryEmailAddressId: null, emailAddresses: [] }) } }),
+    });
+    await expect(verifier.verify(new Request(`${origin}/v1/dashboard`))).rejects.toThrow(expected);
+  });
+
+  it('rejects a missing configured primary-email record and configured owner email mismatch', async () => {
+    const client = (emailAddress: string, primaryEmailAddressId = 'id_missing') => ({
+      authenticateRequest: async () => ({ isAuthenticated: true, toAuth: () => ({ userId: 'user_owner123', sessionId: 'sess', sessionClaims: { iss: issuer, azp: origin, iat: 1_725_000_000 } }) }),
+      users: { getUser: async () => ({ primaryEmailAddressId, emailAddresses: [{ id: 'id_actual', emailAddress, verification: { status: 'verified' } }] }) },
+    });
+    await expect(createClerkOwnerVerifier({ secretKey: 'synthetic-secret-key', publishableKey: 'synthetic-public-key', webOrigin: origin, issuer, createClient: () => client('owner@example.test') }).verify(new Request(origin))).rejects.toThrow('verified_email_required');
+    await expect(createClerkOwnerVerifier({ secretKey: 'synthetic-secret-key', publishableKey: 'synthetic-public-key', webOrigin: origin, issuer, ownerEmail: 'owner@example.test', createClient: () => client('other@example.test', 'id_actual') }).verify(new Request(origin))).rejects.toThrow('owner_email_mismatch');
+  });
 });

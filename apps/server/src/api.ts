@@ -22,9 +22,8 @@ export type TrustedApiComposition = Pick<
   | 'alerts'
 > & {
   connectedHealthProbe?: () => Promise<ConnectedHealthProbeResult>;
-  database?: DatabaseClient;
+  resources?: { database: DatabaseClient; close(): Promise<void> };
   ownerId?: string;
-  close?: () => Promise<void>;
 };
 
 export async function startApi(
@@ -42,19 +41,19 @@ export async function startApi(
       : null;
   const connectedOwnerVerifier = resolvedComposition?.ownerVerifier;
   if (config.APP_MODE === 'connected' && !connectedOwnerVerifier) {
-    await resolvedComposition?.close?.();
+    await resolvedComposition?.resources?.close();
     throw new Error('trusted_api_composition_required');
   }
   if (
     config.APP_MODE === 'connected' &&
     !resolvedComposition?.connectedHealthProbe
   ) {
-    await resolvedComposition?.close?.();
+    await resolvedComposition?.resources?.close();
     throw new Error('connected_health_probe_required');
   }
   const database =
     config.APP_MODE === 'connected'
-      ? resolvedComposition?.database ?? createPostgresClient(config.DATABASE_URL)
+      ? resolvedComposition?.resources?.database ?? createPostgresClient(config.DATABASE_URL)
       : null;
   const repositories = database ? createRepositories(database) : null;
   if (repositories && config.APP_MODE === 'connected' && !resolvedComposition?.ownerId) {
@@ -64,7 +63,7 @@ export async function startApi(
         email: config.OWNER_EMAIL,
       });
     } catch (error) {
-      await (resolvedComposition?.close ?? database?.close.bind(database))?.();
+      await (resolvedComposition?.resources?.close ?? database?.close.bind(database))?.();
       throw error;
     }
   }
@@ -133,7 +132,7 @@ export async function startApi(
 
     if (database) {
       app.addHook('onClose', async () => {
-        await (resolvedComposition?.close ?? database.close.bind(database))();
+        await (resolvedComposition?.resources?.close ?? database.close.bind(database))();
       });
     }
 
@@ -146,10 +145,10 @@ export async function startApi(
       try {
         await app.close();
       } catch {
-        await (resolvedComposition?.close ?? database?.close.bind(database))?.();
+        await (resolvedComposition?.resources?.close ?? database?.close.bind(database))?.();
       }
     } else {
-      await (resolvedComposition?.close ?? database?.close.bind(database))?.();
+      await (resolvedComposition?.resources?.close ?? database?.close.bind(database))?.();
     }
     throw error;
   }

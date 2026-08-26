@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   parseApiEnvironment,
+  parseEnrollmentEnvironment,
   parseEnvironment,
   parseMigrationDatabaseUrl,
   parseWorkerEnvironment,
@@ -191,5 +192,16 @@ describe('environment guards', () => {
       CLERK_ISSUER_URL: 'https://synthetic.clerk.accounts.dev', CLERK_SECRET_KEY: 'synthetic-secret-key',
       CSRF_SECRET: 'synthetic-csrf-secret-is-at-least-32-chars',
     })).toThrow(/WEB_ORIGIN/);
+  });
+
+  it('partitions enrollment and migration configuration from API and worker secrets', () => {
+    const enrollment = parseEnrollmentEnvironment({
+      APP_MODE: 'connected', NODE_ENV: 'test', DATABASE_URL: 'postgresql://localhost/aurum',
+      OWNER_CLERK_USER_ID: 'user_owner123', OWNER_EMAIL: 'owner@example.test',
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: oauthEncryptionKey,
+    });
+    expect(enrollment).not.toHaveProperty('CLERK_SECRET_KEY');
+    expect(enrollment).not.toHaveProperty('ACCOUNT_REFERENCE_ENCRYPTION_KEY');
+    expect(parseMigrationDatabaseUrl('postgresql://localhost/aurum', 'test')).toBe('postgresql://localhost/aurum');
   });
 });

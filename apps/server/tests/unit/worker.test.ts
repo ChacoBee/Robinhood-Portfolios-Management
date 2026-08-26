@@ -1,5 +1,5 @@
 import type { OAuthClientProvider } from '@modelcontextprotocol/client';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   startWorker,
   type TrustedRobinhoodWorkerComposition,
@@ -43,7 +43,9 @@ describe('connected worker composition', () => {
   });
 
   it('accepts an OAuth client provider composition before enforcing alert composition', async () => {
+    const close = vi.fn();
     const composition: Omit<TrustedRobinhoodWorkerComposition, 'afterSnapshotPromoted'> = {
+      resources: { database: { close } as never, close },
       endpoint: 'https://mcp.example.test',
       approvedEndpointOrigins: ['https://mcp.example.test'],
       authProvider: oauthProvider,
@@ -70,5 +72,6 @@ describe('connected worker composition', () => {
         composition as TrustedRobinhoodWorkerComposition,
       ),
     ).rejects.toThrow('alert_evaluation_composition_required');
+    expect(close).toHaveBeenCalledOnce();
   });
 });

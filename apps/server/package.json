@@ -16,7 +16,7 @@
   },
   "dependencies": {
     "@aurum/domain": "*",
-    "@clerk/backend": "^3.16.12",
+    "@clerk/backend": "3.16.12",
     "@fastify/cors": "^11.1.0",
     "@fastify/helmet": "^13.0.2",
     "@fastify/rate-limit": "^10.3.0",

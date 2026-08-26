@@ -49,29 +49,59 @@ describe('trusted runtime composition loader', () => {
     const close = vi.fn();
     const composition = await createApiComposition({
       environment: apiEnvironment,
-      database: { close },
+      resources: { database: { close } as never, close },
       repositories: {
         portfolios: { createOwner: vi.fn() },
         oauthCredentials: { load: vi.fn().mockResolvedValue({ connectionState: 'connected', tokenSet: 'encrypted', lastHeartbeatAt: '2026-08-26T12:00:00.000Z' }) },
+        alerts: { appendEvent: vi.fn() },
       },
     });
     await expect(composition.connectedHealthProbe?.()).resolves.toEqual({ providerVerified: true, workerHeartbeatAt: '2026-08-26T12:00:00.000Z' });
-    await composition.close?.();
+    await composition.resources.close();
+    expect(close).toHaveBeenCalledOnce();
+  });
+
+  it('closes the single owned resource bundle when API composition setup fails', async () => {
+    const close = vi.fn();
+    await expect(createApiComposition({
+      environment: apiEnvironment,
+      resources: { database: { close } as never, close },
+      repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
+      createClerkVerifier: () => { throw new Error('clerk_setup_failed'); },
+    })).rejects.toThrow('clerk_setup_failed');
     expect(close).toHaveBeenCalledOnce();
   });
 
   it('pins the worker endpoint, stores OAuth by internal owner UUID, and heartbeats only after promotion', async () => {
     const markHeartbeat = vi.fn();
+    const evaluateAlerts = vi.fn();
     const composition = await createWorkerComposition({
       environment: workerEnvironment,
-      database: { close: vi.fn() },
-      repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() } },
+      resources: { database: { close: vi.fn() } as never, close: vi.fn() },
+      repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
       ownerId: '11111111-1111-5111-8111-111111111111',
       createStore: (_credentials, ownerId) => ({ ownerId, markHeartbeat }),
+      evaluateAlerts,
     });
     expect(composition.endpoint).toBe('https://agent.robinhood.com/mcp/trading');
     expect(composition.authProvider).toHaveProperty('redirectUrl');
     await composition.afterSnapshotPromoted({ userId: 'ignored-clerk-id', snapshotId: 'snapshot', sourceAsOf: '2026-08-26T12:00:00.000Z', calculationVersion: 'v1' });
+    expect(evaluateAlerts).toHaveBeenCalledWith({ userId: 'ignored-clerk-id', snapshotId: 'snapshot', sourceAsOf: '2026-08-26T12:00:00.000Z', calculationVersion: 'v1' });
     expect(markHeartbeat).toHaveBeenCalledOnce();
+    expect(evaluateAlerts.mock.invocationCallOrder[0]!).toBeLessThan(markHeartbeat.mock.invocationCallOrder[0]!);
+  });
+
+  it('does not heartbeat when PostgreSQL alert evaluation fails', async () => {
+    const markHeartbeat = vi.fn();
+    const composition = await createWorkerComposition({
+      environment: workerEnvironment,
+      resources: { database: { close: vi.fn() } as never, close: vi.fn() },
+      repositories: { portfolios: { createOwner: vi.fn() }, oauthCredentials: { load: vi.fn() }, alerts: { appendEvent: vi.fn() } },
+      ownerId: '11111111-1111-5111-8111-111111111111',
+      createStore: () => ({ markHeartbeat }),
+      evaluateAlerts: async () => { throw new Error('alert_evaluation_failed'); },
+    });
+    await expect(composition.afterSnapshotPromoted({ userId: 'owner', snapshotId: 'snapshot', sourceAsOf: '2026-08-26T12:00:00.000Z', calculationVersion: 'v1' })).rejects.toThrow('alert_evaluation_failed');
+    expect(markHeartbeat).not.toHaveBeenCalled();
   });
 });

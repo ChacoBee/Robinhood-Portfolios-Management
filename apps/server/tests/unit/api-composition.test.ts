@@ -47,7 +47,7 @@ describe('connected API composition', () => {
     const close = vi.fn();
     await expect(startApi(environment, {
       ownerVerifier: { verify: async () => { throw new Error('unused'); } },
-      close,
+      resources: { database: { close } as never, close },
     })).rejects.toThrow('connected_health_probe_required');
     expect(close).toHaveBeenCalledOnce();
   });
