@@ -90,7 +90,7 @@ describe('connected Compose runtime', () => {
       AURUM_API_URL: 'http://api:8787',
     });
     expect(services['connect-robinhood']?.environment).toEqual({
-      APP_MODE: sentinels.APP_MODE,
+      APP_MODE: 'connected',
       NODE_ENV: sentinels.NODE_ENV,
       DATABASE_URL: sentinels.DATABASE_URL,
       OWNER_CLERK_USER_ID: sentinels.OWNER_CLERK_USER_ID,

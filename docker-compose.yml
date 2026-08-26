@@ -101,7 +101,7 @@ services:
     command: connect-robinhood
     profiles: [ops]
     environment:
-      APP_MODE: ${APP_MODE:?Set APP_MODE in the operator environment}
+      APP_MODE: connected
       NODE_ENV: ${NODE_ENV:?Set NODE_ENV in the operator environment}
       DATABASE_URL: ${DATABASE_URL:?Set DATABASE_URL in the operator environment}
       OWNER_CLERK_USER_ID: ${OWNER_CLERK_USER_ID:?Set OWNER_CLERK_USER_ID in the operator environment}
