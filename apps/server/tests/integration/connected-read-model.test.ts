@@ -337,6 +337,12 @@ describe('connected last-good read models', () => {
         }),
       ],
     );
+    await database.client.query(
+      `insert into alert_events (
+         id, rule_id, snapshot_id, fingerprint, state, evidence
+       ) values ($1, $2, $3, 'suppressed-alert-evidence', 'suppressed', '{}'::jsonb)`,
+      ['00000000-0000-4000-8000-000000000743', ruleId, '00000000-0000-4000-8000-000000000711'],
+    );
 
     await expect(source.getAlerts()).resolves.toMatchObject({
       alerts: [
@@ -370,6 +376,7 @@ describe('connected last-good read models', () => {
     expect(JSON.stringify(await source.getAlerts())).not.toContain(
       'private-provider-scope-must-not-leak',
     );
+    expect(JSON.stringify(await source.getAlerts())).not.toContain('suppressed-alert-evidence');
   });
 
   it('returns a stable unavailable error instead of demo data without last-good state', async () => {

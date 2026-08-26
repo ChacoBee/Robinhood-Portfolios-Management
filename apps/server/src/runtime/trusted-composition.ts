@@ -46,8 +46,8 @@ export async function createApiComposition(options: ApiCompositionOptions = {}) 
   const config = parseApiEnvironment(options.environment ?? process.env);
   if (config.APP_MODE !== 'connected') throw new Error('connected_mode_required');
   const resources = options.resources ?? localResources(config.DATABASE_URL);
-  const repositories = options.repositories ?? createRepositories(resources.database);
   try {
+    const repositories = options.repositories ?? createRepositories(resources.database);
     const ownerId = await configuredOwnerId(repositories, options.ownerId, { clerkUserId: config.OWNER_CLERK_USER_ID, email: config.OWNER_EMAIL });
     const ownerVerifier = (options.createClerkVerifier ?? createClerkOwnerVerifier)({ secretKey: config.CLERK_SECRET_KEY, publishableKey: config.CLERK_PUBLISHABLE_KEY, webOrigin: config.WEB_ORIGIN, issuer: config.CLERK_ISSUER_URL, ownerClerkUserId: config.OWNER_CLERK_USER_ID, ownerEmail: config.OWNER_EMAIL });
     return {
@@ -73,8 +73,8 @@ export async function createWorkerComposition(options: WorkerCompositionOptions 
   const config = parseWorkerEnvironment(options.environment ?? process.env);
   if (config.APP_MODE !== 'connected') throw new Error('connected_mode_required');
   const resources = options.resources ?? localResources(config.DATABASE_URL);
-  const repositories = options.repositories ?? createRepositories(resources.database);
   try {
+    const repositories = options.repositories ?? createRepositories(resources.database);
     const ownerId = await configuredOwnerId(repositories, options.ownerId, { clerkUserId: config.OWNER_CLERK_USER_ID, email: config.OWNER_EMAIL });
     const store = options.createStore?.(repositories.oauthCredentials, ownerId, config.ROBINHOOD_OAUTH_ENCRYPTION_KEY) ?? new RobinhoodOAuthStore(repositories.oauthCredentials as OAuthCredentialRepository, ownerId, config.ROBINHOOD_OAUTH_ENCRYPTION_KEY);
     const evaluateAlerts = options.evaluateAlerts ?? createPostgresAlertEvaluator({ database: resources.database, alerts: repositories.alerts });

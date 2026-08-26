@@ -1177,6 +1177,7 @@ export function createConnectedReadModelSource(
            from alert_events event
            join alert_rules rule on rule.id = event.rule_id
            where rule.user_id = $1
+             and event.state = 'breach_confirmed'
            order by event.created_at desc
            limit 100`,
           [context.ownerId],

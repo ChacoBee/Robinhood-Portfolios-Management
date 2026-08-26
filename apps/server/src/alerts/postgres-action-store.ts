@@ -67,7 +67,7 @@ export function createPostgresAlertActionStore(options: {
           input.kind,
           JSON.stringify({ value: input.threshold, scopeId: input.scopeId }),
           input.kind.includes('move') || input.kind === 'material_value_change'
-            ? 'prior_regular_close'
+            ? 'prior_regular_session_close'
             : null,
           input.cooldownSeconds,
           input.dailyCap,
