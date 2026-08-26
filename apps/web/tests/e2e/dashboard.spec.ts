@@ -72,7 +72,7 @@ test.describe('Aurum dashboard', () => {
 
     const navigation = page.getByRole('navigation', { name: 'Mobile primary' });
     await expect(navigation).toHaveAttribute('data-aurum-ready', 'true');
-    await expect(navigation.getByRole('link', { name: 'Overview' })).toBeVisible();
+    await expect(navigation.getByRole('link', { name: 'Dashboard' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Holdings' })).toHaveAttribute('aria-current', 'page');
     await expect(navigation.getByRole('link', { name: 'Activity' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Alerts' })).toBeVisible();
@@ -80,9 +80,22 @@ test.describe('Aurum dashboard', () => {
     await expect(page.getByRole('menuitem').allTextContents()).resolves.toEqual([
       'Accounts',
       'Performance',
-      'Analytics',
+      'Allocation',
       'Settings',
     ]);
+  });
+
+  test('mobile shell keeps primary controls reachable and hides the desktop rail', async ({ page }) => {
+    await page.setViewportSize({ width: 390, height: 844 });
+    await gotoPage(page, '/holdings');
+
+    await expect(page.locator('.side-rail')).toBeHidden();
+    await expect(page.locator('.mobile-tab-bar')).toBeVisible();
+    const targets = await page.locator('.mobile-tab-bar a, .mobile-tab-bar button').evaluateAll((items) =>
+      items.map((item) => item.getBoundingClientRect().height),
+    );
+    expect(targets.every((height) => height >= 44)).toBe(true);
+    await expect(page.getByRole('heading', { name: 'Holdings' }).first()).toBeVisible();
   });
 
   test('screen privacy survives in-app navigation for the browser session', async ({ page }) => {

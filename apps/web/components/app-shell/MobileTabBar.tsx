@@ -3,21 +3,13 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
-import { pathIsActive } from './navigation';
+import { NavigationIcon } from './NavigationIcon';
+import { pathIsActive, primaryNavigation } from './navigation';
 import { useIslandReady } from '../../lib/client/use-island-ready';
 
-const directTabs = [
-  { label: 'Overview', href: '/', glyph: 'OV' },
-  { label: 'Holdings', href: '/holdings', glyph: 'HO' },
-  { label: 'Activity', href: '/activity', glyph: 'AT' },
-  { label: 'Alerts', href: '/alerts', glyph: 'AL' },
-] as const;
-const moreTabs = [
-  { label: 'Accounts', href: '/accounts' },
-  { label: 'Performance', href: '/performance' },
-  { label: 'Analytics', href: '/analytics' },
-  { label: 'Settings', href: '/settings' },
-] as const;
+const directDestinations = new Set(['/', '/holdings', '/activity', '/alerts']);
+const directTabs = primaryNavigation.filter((item) => directDestinations.has(item.href));
+const moreTabs = primaryNavigation.filter((item) => !directDestinations.has(item.href));
 
 export function MobileTabBar() {
   const ready = useIslandReady();
@@ -55,7 +47,7 @@ export function MobileTabBar() {
           href={item.href}
           key={item.href}
         >
-          <span aria-hidden="true">{item.glyph}</span>
+          <NavigationIcon name={item.icon} />
           <small>{item.label}</small>
         </Link>
       ))}
@@ -70,6 +62,7 @@ export function MobileTabBar() {
                 onClick={() => setOpen(false)}
                 role="menuitem"
               >
+                <NavigationIcon name={item.icon} />
                 {item.label}
               </Link>
             ))}

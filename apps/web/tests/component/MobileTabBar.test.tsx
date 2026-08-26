@@ -11,7 +11,7 @@ describe('mobile navigation', () => {
     render(<MobileTabBar />);
 
     const navigation = screen.getByRole('navigation', { name: 'Mobile primary' });
-    expect(navigation).toHaveTextContent('Overview');
+    expect(navigation).toHaveTextContent('Dashboard');
     expect(navigation).toHaveTextContent('Holdings');
     expect(navigation).toHaveTextContent('Activity');
     expect(navigation).toHaveTextContent('Alerts');
@@ -22,7 +22,7 @@ describe('mobile navigation', () => {
     expect(screen.getAllByRole('menuitem').map((item) => item.textContent)).toEqual([
       'Accounts',
       'Performance',
-      'Analytics',
+      'Allocation',
       'Settings',
     ]);
     expect(screen.getByRole('menuitem', { name: 'Performance' })).toHaveAttribute('aria-current', 'page');

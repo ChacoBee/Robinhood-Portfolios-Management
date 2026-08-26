@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { DashboardShell } from '../../components/app-shell/DashboardShell';
 
@@ -12,11 +12,12 @@ describe('Aurum application shell', () => {
 
     expect(screen.getByText('Aurum')).toBeVisible();
     expect(screen.getByText('Portfolio intelligence')).toBeVisible();
-    expect(screen.getByRole('link', { name: /Dashboard/ })).toHaveAttribute('href', '/');
-    expect(screen.getByRole('link', { name: /Allocation/ })).toHaveAttribute('href', '/analytics');
+    const desktopNavigation = within(screen.getByRole('complementary', { name: 'Primary' }));
+    expect(desktopNavigation.getByRole('link', { name: /Dashboard/ })).toHaveAttribute('href', '/');
+    expect(desktopNavigation.getByRole('link', { name: /Allocation/ })).toHaveAttribute('href', '/analytics');
     expect(screen.getByText('Read-only \u00b7 No trading access')).toBeVisible();
     expect(screen.queryByText('Obsidian Ledger')).not.toBeInTheDocument();
     expect(container.querySelector('.app-shell')).toHaveAttribute('data-shell-mode', 'demo');
-    expect(container.querySelectorAll('.nav-icon')).toHaveLength(8);
+    expect(container.querySelectorAll('.side-rail .nav-icon')).toHaveLength(8);
   });
 });
