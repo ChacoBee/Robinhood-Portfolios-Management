@@ -256,11 +256,39 @@ describe('Robinhood enrollment command', () => {
     await server.close();
   });
 
-  it('rejects an issuer mismatch before consuming the single-use state', () => {
+  it('accepts a valid callback without an unadvertised issuer parameter', async () => {
+    const { startOAuthCallbackServer, validateOAuthCallback } = cliUnderTest();
+    expect(startOAuthCallbackServer).toBeTypeOf('function');
+    expect(validateOAuthCallback).toBeTypeOf('function');
+    if (!startOAuthCallbackServer || !validateOAuthCallback) return;
+    const provider = { consumeState: vi.fn((value: string) => value === 'state') };
+    const server = await startOAuthCallbackServer({
+      host: '127.0.0.1',
+      port: 0,
+      validate: (params) => validateOAuthCallback(provider, params),
+      timeoutMs: 1_000,
+    });
+    const address = (server as unknown as { address(): { port: number } }).address();
+
+    await expect(
+      fetch(`http://127.0.0.1:${address.port}/callback?code=opaque-code&state=state`),
+    ).resolves.toMatchObject({ status: 200 });
+    await expect(server.waitForCallback()).resolves.toBeInstanceOf(URLSearchParams);
+    expect(provider.consumeState).toHaveBeenCalledWith('state');
+    await server.close();
+  });
+
+  it('accepts an omitted issuer but rejects a present mismatch before consuming the single-use state', () => {
     const { validateOAuthCallback } = cliUnderTest();
     expect(validateOAuthCallback).toBeTypeOf('function');
     if (!validateOAuthCallback) return;
     const provider = { consumeState: vi.fn(() => true) };
+
+    expect(
+      validateOAuthCallback(provider, new URLSearchParams({ state: 'state' })),
+    ).toBe(true);
+    expect(provider.consumeState).toHaveBeenCalledWith('state');
+    provider.consumeState.mockClear();
 
     expect(
       validateOAuthCallback(provider, new URLSearchParams({ state: 'state', iss: 'https://wrong.example' })),

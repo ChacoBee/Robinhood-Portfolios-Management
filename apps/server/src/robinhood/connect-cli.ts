@@ -74,7 +74,6 @@ export async function startOAuthCallbackServer(
       settled ||
       !callbackHasExactlyOne(params, 'code') ||
       !callbackHasExactlyOne(params, 'state') ||
-      !callbackHasExactlyOne(params, 'iss') ||
       params.has('error') ||
       !options.validate(params)
     ) {
@@ -200,7 +199,10 @@ export function validateOAuthCallback(
   params: URLSearchParams,
 ): boolean {
   const state = params.get('state');
-  return params.get('iss') === callbackIssuer && state !== null && provider.consumeState(state);
+  const issuerIsValid =
+    !params.has('iss') ||
+    (callbackHasExactlyOne(params, 'iss') && params.get('iss') === callbackIssuer);
+  return issuerIsValid && state !== null && provider.consumeState(state);
 }
 
 /** One-shot operator command. A token is marked connected only after tool verification. */
