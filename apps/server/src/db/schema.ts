@@ -530,3 +530,36 @@ export const recoveryCodes = pgTable(
   },
   (table) => [uniqueIndex('recovery_codes_hash_unique').on(table.codeHash)],
 );
+
+export const robinhoodOauthCredentials = pgTable(
+  'robinhood_oauth_credentials',
+  {
+    id: uuid('id').primaryKey(),
+    userId: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    clientInformation: text('client_information'),
+    tokenSet: text('token_set'),
+    connectionState: text('connection_state').notNull(),
+    tokenUpdatedAt: timestamp('token_updated_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    lastHeartbeatAt: timestamp('last_heartbeat_at', {
+      withTimezone: true,
+      mode: 'string',
+    }),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'string' })
+      .notNull()
+      .defaultNow(),
+    ...auditColumns,
+  },
+  (table) => [
+    uniqueIndex('robinhood_oauth_credentials_owner_provider_unique').on(
+      table.userId,
+      table.provider,
+    ),
+    index('robinhood_oauth_credentials_provider_idx').on(table.provider),
+  ],
+);

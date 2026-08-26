@@ -13,6 +13,7 @@ const environment = {
   CLERK_SECRET_KEY: 'sk_test_12345678901234567890',
   CSRF_SECRET: 'synthetic-csrf-secret-is-at-least-32-chars',
   ACCOUNT_REFERENCE_ENCRYPTION_KEY: Buffer.alloc(32, 31).toString('base64'),
+  ROBINHOOD_OAUTH_ENCRYPTION_KEY: Buffer.alloc(32, 32).toString('base64'),
 } as const;
 
 describe('connected API composition', () => {

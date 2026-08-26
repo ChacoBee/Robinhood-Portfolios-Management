@@ -3,6 +3,7 @@ import { parseEnvironment, parseMigrationDatabaseUrl } from '../../src/config';
 
 describe('environment guards', () => {
   const accountReferenceKey = Buffer.alloc(32, 19).toString('base64');
+  const oauthEncryptionKey = Buffer.alloc(32, 23).toString('base64');
 
   const connectedEnvironment = {
     APP_MODE: 'connected',
@@ -16,6 +17,7 @@ describe('environment guards', () => {
     CLERK_SECRET_KEY: 'sk_test_12345678901234567890',
     CSRF_SECRET: 'synthetic-csrf-secret-is-at-least-32-chars',
     ACCOUNT_REFERENCE_ENCRYPTION_KEY: accountReferenceKey,
+    ROBINHOOD_OAUTH_ENCRYPTION_KEY: oauthEncryptionKey,
   } as const;
 
   it('validates the migration URL and enforces production TLS', () => {
@@ -51,6 +53,32 @@ describe('environment guards', () => {
         CSRF_SECRET: undefined,
       }),
     ).toThrow(/CSRF_SECRET/);
+  });
+
+  it('requires an exactly 32-byte base64 OAuth encryption key only in connected mode', () => {
+    expect(() =>
+      parseEnvironment({
+        ...connectedEnvironment,
+        ROBINHOOD_OAUTH_ENCRYPTION_KEY: undefined,
+      }),
+    ).toThrow(/ROBINHOOD_OAUTH_ENCRYPTION_KEY/);
+    expect(() =>
+      parseEnvironment({
+        ...connectedEnvironment,
+        ROBINHOOD_OAUTH_ENCRYPTION_KEY: Buffer.alloc(31, 23).toString('base64'),
+      }),
+    ).toThrow(/ROBINHOOD_OAUTH_ENCRYPTION_KEY/);
+    expect(
+      parseEnvironment({
+        ...connectedEnvironment,
+        ROBINHOOD_OAUTH_ENCRYPTION_KEY: oauthEncryptionKey,
+      }),
+    ).toMatchObject({
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: oauthEncryptionKey,
+    });
+    expect(
+      parseEnvironment({ APP_MODE: 'demo', NODE_ENV: 'test' }),
+    ).toEqual({ APP_MODE: 'demo', NODE_ENV: 'test' });
   });
 
   it('requires PostgreSQL and verified TLS in connected production', () => {

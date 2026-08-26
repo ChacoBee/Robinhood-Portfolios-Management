@@ -136,6 +136,30 @@ export interface AuditRepository {
   }): Promise<string>;
 }
 
+export interface OAuthCredentialRow {
+  clientInformation: string | null;
+  tokenSet: string | null;
+  connectionState: 'enrolling' | 'connected';
+  tokenUpdatedAt: string | Date | null;
+  lastHeartbeatAt: string | Date | null;
+}
+
+export interface OAuthCredentialRepository {
+  load(ownerId: string, provider: 'robinhood'): Promise<OAuthCredentialRow | null>;
+  saveClientInformation(
+    ownerId: string,
+    provider: 'robinhood',
+    clientInformation: string,
+  ): Promise<void>;
+  saveTokens(
+    ownerId: string,
+    provider: 'robinhood',
+    tokenSet: string,
+  ): Promise<void>;
+  markHeartbeat(ownerId: string, provider: 'robinhood'): Promise<void>;
+  disconnect(ownerId: string, provider: 'robinhood'): Promise<void>;
+}
+
 interface SnapshotRow {
   id: string;
   user_id: string;
@@ -879,12 +903,91 @@ function createAuditRepository(database: DatabaseClient): AuditRepository {
   };
 }
 
+function createOAuthCredentialRepository(
+  database: DatabaseClient,
+): OAuthCredentialRepository {
+  return {
+    async load(ownerId, provider) {
+      const result = await database.query<{
+        client_information: string | null;
+        token_set: string | null;
+        connection_state: 'enrolling' | 'connected';
+        token_updated_at: string | Date | null;
+        last_heartbeat_at: string | Date | null;
+      }>(
+        `select client_information, token_set, connection_state, token_updated_at,
+                last_heartbeat_at
+         from robinhood_oauth_credentials
+         where user_id = $1 and provider = $2`,
+        [ownerId, provider],
+      );
+      const row = result.rows[0];
+      if (!row) return null;
+      return {
+        clientInformation: row.client_information,
+        tokenSet: row.token_set,
+        connectionState: row.connection_state,
+        tokenUpdatedAt: row.token_updated_at,
+        lastHeartbeatAt: row.last_heartbeat_at,
+      };
+    },
+
+    async saveClientInformation(ownerId, provider, clientInformation) {
+      await database.query(
+        `insert into robinhood_oauth_credentials (
+           id, user_id, provider, client_information, connection_state
+         ) values ($1, $2, $3, $4, 'enrolling')
+         on conflict (user_id, provider) do update set
+           client_information = excluded.client_information,
+           connection_state = case
+             when robinhood_oauth_credentials.token_set is null then 'enrolling'
+             else 'connected'
+           end,
+           updated_at = now()`,
+        [randomUUID(), ownerId, provider, clientInformation],
+      );
+    },
+
+    async saveTokens(ownerId, provider, tokenSet) {
+      await database.query(
+        `insert into robinhood_oauth_credentials (
+           id, user_id, provider, token_set, connection_state, token_updated_at
+         ) values ($1, $2, $3, $4, 'connected', now())
+         on conflict (user_id, provider) do update set
+           token_set = excluded.token_set,
+           connection_state = 'connected',
+           token_updated_at = now(),
+           updated_at = now()`,
+        [randomUUID(), ownerId, provider, tokenSet],
+      );
+    },
+
+    async markHeartbeat(ownerId, provider) {
+      await database.query(
+        `update robinhood_oauth_credentials
+         set last_heartbeat_at = now(), updated_at = now()
+         where user_id = $1 and provider = $2`,
+        [ownerId, provider],
+      );
+    },
+
+    async disconnect(ownerId, provider) {
+      await database.query(
+        `delete from robinhood_oauth_credentials
+         where user_id = $1 and provider = $2`,
+        [ownerId, provider],
+      );
+    },
+  };
+}
+
 export interface RepositorySet {
   portfolios: PortfolioRepository;
   imports: ImportRepository;
   alerts: AlertRepository;
   jobs: JobRepository;
   audit: AuditRepository;
+  oauthCredentials: OAuthCredentialRepository;
 }
 
 export function createRepositories(
@@ -897,5 +1000,6 @@ export function createRepositories(
     alerts: createAlertRepository(database),
     jobs: createJobRepository(database),
     audit: createAuditRepository(database),
+    oauthCredentials: createOAuthCredentialRepository(database),
   };
 }

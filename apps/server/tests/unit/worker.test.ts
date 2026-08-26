@@ -37,6 +37,7 @@ describe('connected worker composition', () => {
         ACCOUNT_REFERENCE_ENCRYPTION_KEY: Buffer.alloc(32, 31).toString(
           'base64',
         ),
+        ROBINHOOD_OAUTH_ENCRYPTION_KEY: Buffer.alloc(32, 32).toString('base64'),
       }),
     ).rejects.toThrow('verified_robinhood_authorization_required');
   });
@@ -64,6 +65,7 @@ describe('connected worker composition', () => {
           ACCOUNT_REFERENCE_ENCRYPTION_KEY: Buffer.alloc(32, 31).toString(
             'base64',
           ),
+          ROBINHOOD_OAUTH_ENCRYPTION_KEY: Buffer.alloc(32, 32).toString('base64'),
         },
         composition as TrustedRobinhoodWorkerComposition,
       ),

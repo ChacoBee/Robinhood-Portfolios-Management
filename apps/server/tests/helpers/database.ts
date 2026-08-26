@@ -13,6 +13,7 @@ export async function createTestDatabase(): Promise<{
     '0000_initial.sql',
     '0001_light_jetstream.sql',
     '0002_wooden_adam_warlock.sql',
+    '0003_robinhood_oauth.sql',
   ]) {
     const migration = await readFile(
       new URL(`../../drizzle/${filename}`, import.meta.url),

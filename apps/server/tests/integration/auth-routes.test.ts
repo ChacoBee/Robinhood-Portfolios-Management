@@ -27,6 +27,7 @@ const connectedConfig = {
   CLERK_SECRET_KEY: 'sk_test_12345678901234567890',
   CSRF_SECRET: csrfSecret,
   ACCOUNT_REFERENCE_ENCRYPTION_KEY: Buffer.alloc(32, 11).toString('base64'),
+  ROBINHOOD_OAUTH_ENCRYPTION_KEY: Buffer.alloc(32, 12).toString('base64'),
 } as const satisfies AppEnvironment;
 
 const ownerPrincipal: AuthenticatedPrincipal = {

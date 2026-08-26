@@ -79,6 +79,10 @@ const ConnectedEnvironmentSchema = z.object({
     if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
     return Buffer.from(value, 'base64').length === 32;
   }, 'Must be a base64-encoded 32-byte key'),
+  ROBINHOOD_OAUTH_ENCRYPTION_KEY: z.string().refine((value) => {
+    if (!/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
+    return Buffer.from(value, 'base64').length === 32;
+  }, 'Must be a base64-encoded 32-byte key'),
 }).superRefine((value, context) => {
   if (
     value.NODE_ENV === 'production' &&
@@ -125,5 +129,7 @@ export function parseEnvironment(
     CSRF_SECRET: environment.CSRF_SECRET,
     ACCOUNT_REFERENCE_ENCRYPTION_KEY:
       environment.ACCOUNT_REFERENCE_ENCRYPTION_KEY,
+    ROBINHOOD_OAUTH_ENCRYPTION_KEY:
+      environment.ROBINHOOD_OAUTH_ENCRYPTION_KEY,
   });
 }
