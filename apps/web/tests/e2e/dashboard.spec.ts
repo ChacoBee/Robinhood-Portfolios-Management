@@ -47,6 +47,22 @@ test.describe('Aurum dashboard', () => {
     expect((await page.locator('.global-header').boundingBox())?.height).toBe(68);
   });
 
+  test('shared financial surfaces use compact neutral panels', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 1000 });
+    await gotoPage(page, '/');
+
+    const hero = page.locator('.hero-card');
+    await expect(hero).toHaveCSS('background-color', 'rgb(18, 21, 26)');
+    await expect(hero).toHaveCSS('border-radius', '12px');
+    await expect(hero).toHaveCSS('border-top-color', 'rgb(37, 43, 53)');
+    await expect(page.locator('.hero-context')).toHaveCSS('color', 'rgb(127, 135, 146)');
+
+    await gotoPage(page, '/holdings');
+    await expect(page.locator('.data-card')).toHaveCSS('background-color', 'rgb(18, 21, 26)');
+    const firstNumericCell = page.locator('tbody td').filter({ hasText: '$' }).first();
+    expect(await firstNumericCell.evaluate((element) => getComputedStyle(element).fontVariantNumeric)).toContain('tabular-nums');
+  });
+
   test('serves browser security headers on rendered routes', async ({ request }) => {
     const response = await request.get('/');
     expect(response.status()).toBe(200);
