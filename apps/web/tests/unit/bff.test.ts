@@ -80,4 +80,25 @@ describe('connected BFF allowlist', () => {
     }
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
+
+  it('forwards only the Clerk session cookie and replaces upstream 401 bytes', async () => {
+    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(
+      new Response('upstream-secret-error-body', {
+        status: 401,
+        headers: { 'content-type': 'text/plain', 'set-cookie': 'unsafe=upstream' },
+      }),
+    );
+    const request = new Request('https://portfolio.example.test/api/aurum/v1/settings', {
+      headers: { cookie: 'other=value; __session=owner-session; another=value' },
+    });
+
+    const response = await forwardAurumRequest(request, '/v1/settings', 'https://api.example.test', fetcher);
+
+    const headers = fetcher.mock.calls[0]?.[1]?.headers as Headers;
+    expect(headers.get('cookie')).toBe('__session=owner-session');
+    expect(response.status).toBe(401);
+    expect(response.headers.get('cache-control')).toBe('no-store');
+    expect(response.headers.get('set-cookie')).toBeNull();
+    await expect(response.text()).resolves.not.toContain('upstream-secret-error-body');
+  });
 });

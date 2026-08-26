@@ -47,6 +47,12 @@ function errorResponse(status: number, code: string): Response {
   );
 }
 
+function clerkSessionCookie(cookie: string | null): string | null {
+  if (!cookie) return null;
+  const session = cookie.split(';').map((entry) => entry.trim()).find((entry) => entry.startsWith('__session='));
+  return session && session.length > '__session='.length ? session : null;
+}
+
 export async function forwardAurumRequest(
   request: Request,
   path: string,
@@ -68,7 +74,6 @@ export async function forwardAurumRequest(
   const headers = new Headers({ accept: 'application/json' });
   for (const name of [
     'authorization',
-    'cookie',
     'content-type',
     'origin',
     'x-csrf-token',
@@ -76,6 +81,8 @@ export async function forwardAurumRequest(
     const value = request.headers.get(name);
     if (value) headers.set(name, value);
   }
+  const sessionCookie = clerkSessionCookie(request.headers.get('cookie'));
+  if (sessionCookie) headers.set('cookie', sessionCookie);
   const body = writeMethods.has(method) ? await request.arrayBuffer() : undefined;
   if (body && body.byteLength > 15 * 1024 * 1024) {
     return errorResponse(413, 'request_too_large');
@@ -93,6 +100,7 @@ export async function forwardAurumRequest(
   } catch {
     return errorResponse(502, 'upstream_unavailable');
   }
+  if (upstream.status === 401) return errorResponse(401, 'authentication_required');
   return new Response(await upstream.arrayBuffer(), {
     status: upstream.status,
     headers: {

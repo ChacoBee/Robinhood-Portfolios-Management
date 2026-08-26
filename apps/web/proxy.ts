@@ -1,27 +1,35 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { readClerkPublicConfig } from './lib/auth/clerk-public-config';
+import { configuredDataMode } from './lib/api/data-source';
 
-function browserContentSecurityPolicy(nonce: string): string {
-  const scriptPolicy =
-    process.env.NODE_ENV === 'production'
-      ? `'nonce-${nonce}' 'strict-dynamic'`
-      : "'self' 'unsafe-inline' 'unsafe-eval'";
+export function createBrowserContentSecurityPolicy({
+  mode,
+  nonce,
+  clerkFrontendApiOrigin,
+}: Readonly<{ mode: 'demo' | 'connected'; nonce: string; clerkFrontendApiOrigin?: string }>): string {
+  if (mode === 'connected' && !clerkFrontendApiOrigin) throw new Error('Connected mode requires a valid CLERK_FRONTEND_API_URL.');
+  const clerk = mode === 'connected' ? ` ${clerkFrontendApiOrigin}` : '';
   return [
     "default-src 'self'",
     "base-uri 'none'",
     "frame-ancestors 'none'",
     "form-action 'self'",
     "object-src 'none'",
-    "img-src 'self' data:",
+    `img-src 'self' data:${clerk}`,
     "font-src 'self' data:",
     "style-src 'self' 'unsafe-inline'",
-    `script-src ${scriptPolicy}`,
-    "connect-src 'self' ws: wss:",
+    `script-src 'nonce-${nonce}' 'strict-dynamic'`,
+    `connect-src 'self' ws: wss:${clerk}`,
+    `frame-src 'self'${clerk}`,
+    "worker-src 'self' blob:",
   ].join('; ');
 }
 
 export function proxy(request: NextRequest) {
   const nonce = crypto.randomUUID().replaceAll('-', '');
-  const policy = browserContentSecurityPolicy(nonce);
+  const mode = configuredDataMode();
+  const clerk = mode === 'connected' ? readClerkPublicConfig() : null;
+  const policy = createBrowserContentSecurityPolicy({ mode, nonce, ...(clerk ? { clerkFrontendApiOrigin: clerk.frontendApiOrigin } : {}) });
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set('x-nonce', nonce);
   requestHeaders.set('content-security-policy', policy);

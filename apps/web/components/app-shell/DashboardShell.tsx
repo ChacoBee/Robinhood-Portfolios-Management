@@ -10,10 +10,12 @@ export function DashboardShell({
   children,
   mode,
   apiBaseUrl,
+  userControl,
 }: {
   children: ReactNode;
   mode: 'demo' | 'connected';
   apiBaseUrl: string;
+  userControl?: ReactNode;
 }) {
   useEffect(() => {
     // Vinext can hydrate nested client islands immediately after the shell.
@@ -36,7 +38,7 @@ export function DashboardShell({
       <div className="app-shell">
         <DesktopSideRail mode={mode} />
         <div className="app-frame">
-          <GlobalHeader apiBaseUrl={apiBaseUrl} mode={mode} />
+          <GlobalHeader apiBaseUrl={apiBaseUrl} mode={mode} userControl={userControl} />
           {children}
         </div>
         <MobileTabBar />

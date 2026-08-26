@@ -1,7 +1,8 @@
+import type { ReactNode } from 'react';
 import { RefreshControl } from './RefreshControl';
 import { ScreenPrivacyToggle } from './ScreenPrivacyToggle';
 
-export function GlobalHeader({ mode, apiBaseUrl }: { mode: 'demo' | 'connected'; apiBaseUrl: string }) {
+export function GlobalHeader({ mode, apiBaseUrl, userControl }: { mode: 'demo' | 'connected'; apiBaseUrl: string; userControl?: ReactNode }) {
   return (
     <header className="global-header">
       <div className="header-title">
@@ -15,7 +16,7 @@ export function GlobalHeader({ mode, apiBaseUrl }: { mode: 'demo' | 'connected';
         </span>
         <ScreenPrivacyToggle />
         <RefreshControl apiBaseUrl={apiBaseUrl} mode={mode} />
-        <span aria-label="Aurum workspace" className="avatar-button" role="img"><span aria-hidden="true">A</span></span>
+        {userControl ?? <span aria-label="Aurum workspace" className="avatar-button" role="img"><span aria-hidden="true">A</span></span>}
       </div>
     </header>
   );

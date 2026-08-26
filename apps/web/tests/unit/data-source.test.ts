@@ -108,6 +108,30 @@ describe('portfolio data sources', () => {
     });
   });
 
+  it('handles an upstream 401 before parsing its response body', async () => {
+    const bodyWasRead = vi.fn();
+    const unauthorized = {
+      ok: false,
+      status: 401,
+      json: async () => {
+        bodyWasRead();
+        return { error: { code: 'upstream_payload_must_not_escape' } };
+      },
+    } as unknown as Response;
+    const onUnauthorized = vi.fn(() => {
+      throw new Error('authentication_required');
+    });
+    const source = createConnectedPortfolioDataSource({
+      baseUrl: 'https://portfolio-api.example.test',
+      fetcher: vi.fn<typeof fetch>().mockResolvedValue(unauthorized),
+      onUnauthorized,
+    });
+
+    await expect(source.dashboard()).rejects.toThrow('authentication_required');
+    expect(onUnauthorized).toHaveBeenCalledOnce();
+    expect(bodyWasRead).not.toHaveBeenCalled();
+  });
+
   it('encodes dynamic identifiers and forwards the selected performance range', async () => {
     const fetcher = vi.fn<typeof fetch>().mockImplementation(async () =>
       new Response(

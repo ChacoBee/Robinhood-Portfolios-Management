@@ -6,6 +6,7 @@ type ConnectedOptions = {
   baseUrl: string;
   fetcher?: Fetcher;
   requestHeaders?: () => Promise<Readonly<Record<string, string>>>;
+  onUnauthorized?: () => never;
 };
 
 export class ConnectedDataSourceError extends Error {
@@ -39,6 +40,7 @@ export function createConnectedPortfolioDataSource({
   baseUrl,
   fetcher = fetch,
   requestHeaders,
+  onUnauthorized,
 }: ConnectedOptions): PortfolioDataSource {
   const normalizedBaseUrl = normalizeBaseUrl(baseUrl);
 
@@ -59,6 +61,10 @@ export function createConnectedPortfolioDataSource({
       });
     } catch {
       throw new ConnectedDataSourceError('The connected portfolio service could not be reached.', 0, 'network_unavailable');
+    }
+    if (response.status === 401) {
+      if (onUnauthorized) onUnauthorized();
+      throw new ConnectedDataSourceError('Authentication is required.', 401, 'authentication_required');
     }
     if (!response.ok) {
       throw new ConnectedDataSourceError('The connected portfolio service returned an error.', response.status, await errorCode(response));

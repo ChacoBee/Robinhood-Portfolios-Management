@@ -1,4 +1,5 @@
 import { headers } from 'next/headers';
+import { redirect } from 'next/navigation';
 import { createConnectedPortfolioDataSource } from './connected-data-source';
 import { createDemoPortfolioDataSource } from './demo-data-source';
 import type { PortfolioDataSource } from './data-source-types';
@@ -24,6 +25,7 @@ export function getPortfolioDataSource(): PortfolioDataSource {
           ...(cookie ? { cookie } : {}),
         };
       },
+      onUnauthorized: () => redirect('/sign-in'),
     });
   }
   return createDemoPortfolioDataSource();

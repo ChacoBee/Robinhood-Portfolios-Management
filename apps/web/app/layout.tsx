@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from 'next';
 import { Geist, Geist_Mono } from 'next/font/google';
 import { DashboardShell } from '../components/app-shell/DashboardShell';
+import ConnectedAuthShell from '../components/auth/ConnectedAuthShell';
 import { configuredDataMode } from '../lib/api/data-source';
 import './globals.css';
 
@@ -21,7 +22,11 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
   return (
     <html lang="en">
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased`} data-aurum-hydrated="false">
-        <DashboardShell apiBaseUrl={mode === 'connected' ? '/api/aurum' : ''} mode={mode}>{children}</DashboardShell>
+        {mode === 'demo' ? (
+          <DashboardShell apiBaseUrl="" mode="demo">{children}</DashboardShell>
+        ) : (
+          <ConnectedAuthShell>{children}</ConnectedAuthShell>
+        )}
       </body>
     </html>
   );
