@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { startApi } from '../../src/api';
 
 const environment = {
@@ -41,5 +41,14 @@ describe('connected API composition', () => {
         },
       }),
     ).rejects.toThrow('connected_health_probe_required');
+  });
+
+  it('closes a rejected trusted composition before failing startup', async () => {
+    const close = vi.fn();
+    await expect(startApi(environment, {
+      ownerVerifier: { verify: async () => { throw new Error('unused'); } },
+      close,
+    })).rejects.toThrow('connected_health_probe_required');
+    expect(close).toHaveBeenCalledOnce();
   });
 });

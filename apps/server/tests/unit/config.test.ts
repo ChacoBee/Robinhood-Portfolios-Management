@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { parseEnvironment, parseMigrationDatabaseUrl } from '../../src/config';
+import {
+  parseApiEnvironment,
+  parseEnvironment,
+  parseMigrationDatabaseUrl,
+  parseWorkerEnvironment,
+} from '../../src/config';
 
 describe('environment guards', () => {
   const accountReferenceKey = Buffer.alloc(32, 19).toString('base64');
@@ -151,5 +156,40 @@ describe('environment guards', () => {
     expect(parsed).not.toHaveProperty('ROBINHOOD_MCP_URL');
     expect(parsed).not.toHaveProperty('ROBINHOOD_MCP_BEARER_TOKEN');
     expect(parsed).not.toHaveProperty('ROBINHOOD_READONLY_SCOPES');
+  });
+
+  it('partitions API secrets from the Robinhood worker secrets', () => {
+    const api = parseApiEnvironment({
+      APP_MODE: 'connected', NODE_ENV: 'test', DATABASE_URL: 'postgresql://localhost/aurum',
+      OWNER_CLERK_USER_ID: 'user_owner123', OWNER_EMAIL: 'owner@example.test',
+      WEB_ORIGIN: 'http://localhost:3000', CLERK_PUBLISHABLE_KEY: 'pk_test_synthetic_public_identity_12345',
+      CLERK_ISSUER_URL: 'https://synthetic.clerk.accounts.dev', CLERK_SECRET_KEY: 'synthetic-secret-key',
+      CSRF_SECRET: 'synthetic-csrf-secret-is-at-least-32-chars',
+    });
+    expect(api).not.toHaveProperty('ROBINHOOD_OAUTH_ENCRYPTION_KEY');
+    expect(api).not.toHaveProperty('ACCOUNT_REFERENCE_ENCRYPTION_KEY');
+
+    const worker = parseWorkerEnvironment({
+      APP_MODE: 'connected', NODE_ENV: 'test', DATABASE_URL: 'postgresql://localhost/aurum',
+      OWNER_CLERK_USER_ID: 'user_owner123', OWNER_EMAIL: 'owner@example.test',
+      ACCOUNT_REFERENCE_ENCRYPTION_KEY: accountReferenceKey,
+      ROBINHOOD_OAUTH_ENCRYPTION_KEY: oauthEncryptionKey,
+    });
+    expect(worker).not.toHaveProperty('CLERK_SECRET_KEY');
+    expect(worker).not.toHaveProperty('CSRF_SECRET');
+  });
+
+  it.each([
+    ['production loopback HTTP', 'production', 'http://localhost:3000'],
+    ['development non-loopback HTTP', 'development', 'http://portfolio.example.test'],
+    ['path-bearing local URL', 'development', 'http://localhost:3000/path'],
+  ])('rejects %s', (_label, NODE_ENV, WEB_ORIGIN) => {
+    expect(() => parseApiEnvironment({
+      APP_MODE: 'connected', NODE_ENV, DATABASE_URL: 'postgresql://localhost/aurum',
+      OWNER_CLERK_USER_ID: 'user_owner123', OWNER_EMAIL: 'owner@example.test', WEB_ORIGIN,
+      CLERK_PUBLISHABLE_KEY: 'pk_test_synthetic_public_identity_12345',
+      CLERK_ISSUER_URL: 'https://synthetic.clerk.accounts.dev', CLERK_SECRET_KEY: 'synthetic-secret-key',
+      CSRF_SECRET: 'synthetic-csrf-secret-is-at-least-32-chars',
+    })).toThrow(/WEB_ORIGIN/);
   });
 });

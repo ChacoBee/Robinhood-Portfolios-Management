@@ -1,6 +1,6 @@
 import { pathToFileURL } from 'node:url';
 import { createApi, type ApiDependencies } from './app';
-import { parseEnvironment } from './config';
+import { parseApiEnvironment } from './config';
 import { createPostgresClient } from './db/client';
 import { createRepositories } from './db/repositories';
 import { createPostgresAlertActionStore } from './alerts/postgres-action-store';
@@ -10,6 +10,7 @@ import {
 } from './read-models/connected-source';
 import { loadTrustedComposition } from './runtime/composition-loader';
 import { bootstrapConfiguredOwner } from './runtime/owner-bootstrap';
+import type { DatabaseClient } from './db/client';
 
 export type TrustedApiComposition = Pick<
   ApiDependencies,
@@ -21,13 +22,16 @@ export type TrustedApiComposition = Pick<
   | 'alerts'
 > & {
   connectedHealthProbe?: () => Promise<ConnectedHealthProbeResult>;
+  database?: DatabaseClient;
+  ownerId?: string;
+  close?: () => Promise<void>;
 };
 
 export async function startApi(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   trustedComposition?: TrustedApiComposition,
 ) {
-  const config = parseEnvironment(environment);
+  const config = parseApiEnvironment(environment);
   const resolvedComposition =
     config.APP_MODE === 'connected'
       ? trustedComposition ??
@@ -38,27 +42,29 @@ export async function startApi(
       : null;
   const connectedOwnerVerifier = resolvedComposition?.ownerVerifier;
   if (config.APP_MODE === 'connected' && !connectedOwnerVerifier) {
+    await resolvedComposition?.close?.();
     throw new Error('trusted_api_composition_required');
   }
   if (
     config.APP_MODE === 'connected' &&
     !resolvedComposition?.connectedHealthProbe
   ) {
+    await resolvedComposition?.close?.();
     throw new Error('connected_health_probe_required');
   }
   const database =
     config.APP_MODE === 'connected'
-      ? createPostgresClient(config.DATABASE_URL)
+      ? resolvedComposition?.database ?? createPostgresClient(config.DATABASE_URL)
       : null;
   const repositories = database ? createRepositories(database) : null;
-  if (repositories && config.APP_MODE === 'connected') {
+  if (repositories && config.APP_MODE === 'connected' && !resolvedComposition?.ownerId) {
     try {
       await bootstrapConfiguredOwner(repositories.portfolios, {
         clerkUserId: config.OWNER_CLERK_USER_ID,
         email: config.OWNER_EMAIL,
       });
     } catch (error) {
-      await database?.close();
+      await (resolvedComposition?.close ?? database?.close.bind(database))?.();
       throw error;
     }
   }
@@ -126,7 +132,9 @@ export async function startApi(
   });
 
     if (database) {
-      app.addHook('onClose', async () => database.close());
+      app.addHook('onClose', async () => {
+        await (resolvedComposition?.close ?? database.close.bind(database))();
+      });
     }
 
     const port = Number(environment.API_PORT ?? 8787);
@@ -138,10 +146,10 @@ export async function startApi(
       try {
         await app.close();
       } catch {
-        await database?.close();
+        await (resolvedComposition?.close ?? database?.close.bind(database))?.();
       }
     } else {
-      await database?.close();
+      await (resolvedComposition?.close ?? database?.close.bind(database))?.();
     }
     throw error;
   }

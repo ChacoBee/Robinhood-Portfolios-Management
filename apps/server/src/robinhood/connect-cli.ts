@@ -6,7 +6,7 @@ import {
   type OAuthClientProvider,
   type Transport,
 } from '@modelcontextprotocol/client';
-import { parseEnvironment } from '../config';
+import { parseEnrollmentEnvironment } from '../config';
 import { createPostgresClient, type DatabaseClient } from '../db/client';
 import { createRepositories, type RepositorySet } from '../db/repositories';
 import { bootstrapConfiguredOwner } from '../runtime/owner-bootstrap';
@@ -223,7 +223,7 @@ export async function connectRobinhood(options: ConnectRobinhoodOptions): Promis
   let verifyingTools = false;
 
   try {
-    const config = parseEnvironment(options.environment);
+    const config = parseEnrollmentEnvironment(options.environment);
     if (config.APP_MODE !== 'connected') throw safeCallbackFailure();
     database = createDatabase(config.DATABASE_URL);
     const repositories = repositoriesFactory(database);

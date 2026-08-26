@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { pathToFileURL } from 'node:url';
-import { parseEnvironment } from './config';
+import { parseWorkerEnvironment } from './config';
+import type { DatabaseClient } from './db/client';
 import { createPostgresClient } from './db/client';
 import { createRepositories } from './db/repositories';
 import { RobinhoodReadClient } from './robinhood/client';
@@ -20,6 +21,9 @@ import {
 } from './sync/scheduler';
 
 export interface TrustedRobinhoodWorkerComposition {
+  database?: DatabaseClient;
+  ownerId?: string;
+  close?: () => Promise<void>;
   endpoint: string;
   approvedEndpointOrigins: readonly string[];
   authProvider: RobinhoodAuthProvider;
@@ -39,7 +43,7 @@ export async function startWorker(
   environment: Readonly<Record<string, string | undefined>> = process.env,
   trustedComposition?: TrustedRobinhoodWorkerComposition,
 ) {
-  const config = parseEnvironment(environment);
+  const config = parseWorkerEnvironment(environment);
   if (config.APP_MODE !== 'connected') {
     throw new Error('connected_mode_required');
   }
@@ -53,6 +57,7 @@ export async function startWorker(
     throw new Error('verified_robinhood_authorization_required');
   }
   if (!resolvedComposition.afterSnapshotPromoted) {
+    await resolvedComposition.close?.();
     throw new Error('alert_evaluation_composition_required');
   }
 
@@ -64,17 +69,17 @@ export async function startWorker(
     approvedEndpointOrigins: resolvedComposition.approvedEndpointOrigins,
     authProvider: resolvedComposition.authProvider,
   });
-  const database = createPostgresClient(config.DATABASE_URL);
+  const database = resolvedComposition.database ?? createPostgresClient(config.DATABASE_URL);
   const repositories = createRepositories(database, {
     providerIdentifierKeyer: vault,
   });
   try {
-    await bootstrapConfiguredOwner(repositories.portfolios, {
+    if (!resolvedComposition.ownerId) await bootstrapConfiguredOwner(repositories.portfolios, {
       clerkUserId: config.OWNER_CLERK_USER_ID,
       email: config.OWNER_EMAIL,
     });
   } catch (error) {
-    await database.close();
+    await (resolvedComposition.close ?? database.close.bind(database))();
     throw error;
   }
   const client = new RobinhoodReadClient(transport, vault);
@@ -117,7 +122,7 @@ export async function startWorker(
     try {
       await transport.close();
     } finally {
-      await database.close();
+      await (resolvedComposition.close ?? database.close.bind(database))();
     }
   }
 }
