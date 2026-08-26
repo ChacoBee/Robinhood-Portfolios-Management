@@ -169,7 +169,9 @@ export function mapPortfolio(portfolio: ProviderPortfolioResponse, providerRef: 
       portfolio.buying_power?.display_currency ?? portfolio.currency,
       'buying_power_missing',
     ),
-    accrued: mapProviderMoney(portfolio.pending_deposits, portfolio.currency, 'accrued_missing'),
+    // Robinhood cash already includes early access from pending deposits; the
+    // provider exposes no separate accrued value, so model no added accrual.
+    accrued: { state: 'available', value: usd('0') },
     knownUnsupportedAggregate: mapKnownUnsupportedAggregate(portfolio),
     currency: portfolio.currency,
     sourceAsOf: receivedAt,

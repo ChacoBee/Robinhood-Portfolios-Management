@@ -47,11 +47,11 @@ function promote(input: { total: string; knownUnsupported: string | null }) {
 }
 
 describe('snapshot promotion known unsupported aggregate', () => {
-  it('reconciles a provider headline exactly explained by known unsupported assets', () => {
+  it('reconciles without adding an informational deposit to the accrued component', () => {
     expect(promote({ total: '25', knownUnsupported: '20' })).toMatchObject({
       coverage: 'partial_known_unsupported',
       reconciliationStatus: 'reconciled',
-      accounts: [{ knownUnsupportedAggregate: '20', unsupportedDetailValue: '20', modeledTotal: '25' }],
+      accounts: [{ accrued: '0', knownUnsupportedAggregate: '20', unsupportedDetailValue: '20', modeledTotal: '25' }],
       payload: { unsupportedDetailValue: '20' },
     });
   });

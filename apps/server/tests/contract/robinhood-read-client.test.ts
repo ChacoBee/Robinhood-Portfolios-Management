@@ -22,7 +22,7 @@ const account = {
 };
 const portfolio = {
   total_value: '175', equity_value: '125', options_value: '25', futures_value: '0',
-  event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0',
+  event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '10',
   mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD',
   buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' },
 };
@@ -91,6 +91,7 @@ describe('Robinhood live read contract', () => {
     await expect(client.readPortfolio(reference)).resolves.toMatchObject({
       total: { state: 'available', value: { amount: '175', currency: 'USD' } },
       buyingPower: { state: 'available', value: { amount: '25', currency: 'USD' } },
+      accrued: { state: 'available', value: { amount: '0', currency: 'USD' } },
       knownUnsupportedAggregate: { state: 'available', value: { amount: '0', currency: 'USD' } },
     });
     await expect(client.readEquityPositions(reference)).resolves.toHaveLength(1);

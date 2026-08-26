@@ -29,7 +29,7 @@ const vault = new AesGcmAccountReferenceVault(Buffer.alloc(32, 23).toString('bas
 const receivedAt = '2026-08-25T14:01:00.000Z';
 const baseFixtures: Record<AllowedRobinhoodTool, unknown> = {
   get_accounts: { accounts: [{ account_number: '123456789', rhs_account_number: '987654321', type: 'brokerage', brokerage_account_type: 'individual', is_default: true, agentic_allowed: true, option_level: 'option_level_3', state: 'active', deactivated: false, permanently_deactivated: false, nickname: 'Primary brokerage' }] },
-  get_portfolio: { total_value: '175', equity_value: '125', options_value: '25', futures_value: '0', event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '0', mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD', buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' } },
+  get_portfolio: { total_value: '175', equity_value: '125', options_value: '25', futures_value: '0', event_contracts_value: '0', crypto_value: '0', cash: '25', pending_deposits: '10', mutual_funds_value: '0', fixed_income_value: '0', currency: 'USD', buying_power: { buying_power: '25', unleveraged_buying_power: '25', display_currency: 'USD' } },
   get_equity_positions: { positions: [{ symbol: 'AAPL', quantity: '1', intraday_quantity: '0', shares_available_for_sells: '1', shares_held_for_sells: '0', shares_held_for_stock_grants: '0', shares_held_for_options_events: '0', shares_held_for_asset_transfer: '0', shares_pending_from_options_events: '0', type: 'equity', average_buy_price: '100' }] },
   get_equity_quotes: { results: [{ quote: { symbol: 'AAPL', last_trade_price: '125', venue_last_trade_time: '2026-08-25T14:00:30.000Z', last_non_reg_trade_price: null, venue_last_non_reg_trade_time: null, adjusted_previous_close: '124', previous_close: '124', previous_close_date: '2026-08-22', bid_price: '124', venue_bid_time: '2026-08-25T14:00:30.000Z', ask_price: '126', venue_ask_time: '2026-08-25T14:00:30.000Z', has_traded: true, state: 'open' } }] },
   get_option_positions: { positions: [{ option_id: 'option-1', chain_id: 'chain-1', chain_symbol: 'AAPL 260918C00100000', type: 'option', quantity: '1', average_price: '0.2', expiration_date: '2026-09-18', trade_value_multiplier: '100', intraday_average_open_price: '0.2', intraday_quantity: '0', pending_buy_quantity: '0', pending_sell_quantity: '0', pending_assignment_quantity: '0', pending_exercise_quantity: '0', pending_expiration_quantity: '0' }] },
@@ -74,6 +74,8 @@ describe('coherent Robinhood refresh', () => {
     }
     const positions = await database.raw.query<{ provider_market_value: string }>('select provider_market_value from position_observations');
     expect(positions.rows).toEqual([{ provider_market_value: '125.0000000000' }]);
+    const cash = await database.raw.query<{ accrued: string | number }>('select accrued from cash_observations');
+    expect(Number(cash.rows[0]?.accrued)).toBe(0);
     expect(transport.calls).toContainEqual({ tool: 'get_option_positions', args: { account_number: '123456789', nonzero: true } });
   });
 
