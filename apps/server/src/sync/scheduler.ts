@@ -27,6 +27,7 @@ export class RefreshScheduler {
       const closeAt = context.scheduleWindow.closeAt;
       const currentReachedClose =
         closeAt !== null &&
+        owner.currentSnapshotRegularCloseEligible &&
         owner.currentSnapshotAsOf !== null &&
         Date.parse(owner.currentSnapshotAsOf) >= Date.parse(closeAt);
       const lastRefreshContext = owner.lastSuccessfulRefreshAt

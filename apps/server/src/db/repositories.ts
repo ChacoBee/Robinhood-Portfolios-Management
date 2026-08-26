@@ -78,6 +78,7 @@ export interface OwnerRefreshState {
   userId: string;
   lastSuccessfulRefreshAt: string | null;
   currentSnapshotAsOf: string | null;
+  currentSnapshotRegularCloseEligible: boolean;
 }
 
 export interface PortfolioRepository {
@@ -807,6 +808,7 @@ function createPortfolioRepository(
         user_id: string;
         last_successful_refresh_at: string | Date | null;
         current_snapshot_as_of: string | Date | null;
+        current_snapshot_regular_close_eligible: boolean | null;
       }>(
         `select
            owner.id as user_id,
@@ -820,7 +822,16 @@ function createPortfolioRepository(
              from portfolio_snapshots snapshot
              where snapshot.user_id = owner.id and snapshot.is_current = true
              limit 1
-           ) as current_snapshot_as_of
+           ) as current_snapshot_as_of,
+           (
+             select coalesce(
+               snapshot.payload->'quality'->>'regularSessionCloseEligible' = 'true',
+               false
+             )
+             from portfolio_snapshots snapshot
+             where snapshot.user_id = owner.id and snapshot.is_current = true
+             limit 1
+           ) as current_snapshot_regular_close_eligible
          from users owner`,
       );
       return result.rows.map((row) => ({
@@ -833,6 +844,8 @@ function createPortfolioRepository(
           row.current_snapshot_as_of === null
             ? null
             : toIso(row.current_snapshot_as_of),
+        currentSnapshotRegularCloseEligible:
+          row.current_snapshot_regular_close_eligible === true,
       }));
     },
   };

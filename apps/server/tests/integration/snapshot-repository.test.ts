@@ -58,7 +58,9 @@ describe('last-good portfolio snapshots', () => {
         freshness: 'fresh',
         reconciliationStatus: 'reconciled',
         calculationVersion: 'portfolio-v1',
-        payload: {},
+        payload: id.endsWith('112')
+          ? { quality: { regularSessionCloseEligible: true } }
+          : {},
       });
     }
 
@@ -67,5 +69,11 @@ describe('last-good portfolio snapshots', () => {
       totalValue: '110',
     });
     expect(await portfolios.countSnapshots(ownerId)).toBe(2);
+    expect(await portfolios.listOwnerRefreshStates()).toContainEqual(
+      expect.objectContaining({
+        userId: ownerId,
+        currentSnapshotRegularCloseEligible: true,
+      }),
+    );
   });
 });

@@ -105,6 +105,18 @@ describe('coherent Robinhood refresh', () => {
     expect(await repositories.portfolios.getCurrent(ownerId)).toBeNull();
   });
 
+  it('fails closed when an internal refresh job has a malformed trigger payload', async () => {
+    const { database, ownerId, repositories, service } = await setup();
+    await service.request(ownerId, 'scheduled');
+    await database.raw.query("update jobs set payload = '{}'::jsonb where user_id = $1", [ownerId]);
+
+    await expect(service.runNext('sync-worker-a')).resolves.toEqual({
+      state: 'failed',
+      reason: 'unknown_refresh_failure',
+    });
+    await expect(repositories.portfolios.getCurrent(ownerId)).resolves.toBeNull();
+  });
+
   it('preserves last-good data when a quote has no trade valuation', async () => {
     const { ownerId, repositories, service, transport } = await setup();
     await runSuccessfulRefresh(service, ownerId);

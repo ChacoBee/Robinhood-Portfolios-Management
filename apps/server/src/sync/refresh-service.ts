@@ -123,12 +123,13 @@ export class RefreshService {
       await ensureLease();
       syncRunId = this.createId();
       const requestedTrigger = PublicRefreshRequestSchema.safeParse(job.payload);
+      if (!requestedTrigger.success) {
+        throw new Error('invalid_refresh_job_payload');
+      }
       await this.dependencies.portfolios.startSyncRun({
         id: syncRunId,
         userId: job.userId,
-        trigger: requestedTrigger.success
-          ? requestedTrigger.data.trigger
-          : 'scheduled',
+        trigger: requestedTrigger.data.trigger,
       });
       const accounts = await this.dependencies.client.readAccounts();
       const expectedAccountKeys =
@@ -217,9 +218,7 @@ export class RefreshService {
         syncRunId,
         bundles,
         receivedAt,
-        trigger: requestedTrigger.success
-          ? requestedTrigger.data.trigger
-          : 'scheduled',
+        trigger: requestedTrigger.data.trigger,
         ...this.dependencies.valuationSession(),
       });
 
