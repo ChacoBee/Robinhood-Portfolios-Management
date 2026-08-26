@@ -17,7 +17,7 @@ const vault = () => new AesGcmAccountReferenceVault(Buffer.alloc(32, 7).toString
 const account = {
   account_number: '123456789', rhs_account_number: '987654321', type: 'brokerage',
   brokerage_account_type: 'individual', is_default: true, agentic_allowed: true,
-  option_level: 'option_level_3', state: 'active', deactivated: false,
+  option_level: '', state: 'active', deactivated: false,
   permanently_deactivated: false, nickname: 'Primary brokerage',
 };
 const equityPosition = {
@@ -63,6 +63,7 @@ describe('Robinhood live read contract', () => {
     });
     const client = new RobinhoodReadClient(transport, vault(), () => new Date('2026-08-25T14:01:00.000Z'));
     const accountResult = await client.readAccounts();
+    expect(JSON.stringify(accountResult)).not.toContain(account.account_number);
     const reference = accountResult[0]!.providerRef;
     await expect(client.readPortfolio(reference)).resolves.toMatchObject({
       total: { state: 'available', value: { amount: '175', currency: 'USD' } },

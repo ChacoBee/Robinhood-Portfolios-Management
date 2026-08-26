@@ -8,7 +8,7 @@ const nullableDecimal = DecimalStringSchema.nullable();
 export const ProviderAccountSchema = z.object({
   account_number: z.string().min(1), rhs_account_number: z.string().min(1),
   type: z.string().min(1), brokerage_account_type: z.string().min(1),
-  is_default: z.boolean(), agentic_allowed: z.boolean(), option_level: z.string().min(1),
+  is_default: z.boolean(), agentic_allowed: z.boolean(), option_level: z.string(),
   state: z.string().min(1), deactivated: z.boolean(), permanently_deactivated: z.boolean(),
   rhc_account_number: z.string().min(1).nullable().optional(),
   unsettled_funds: nullableDecimal.optional(), nickname: z.string().min(1).nullable().optional(),
