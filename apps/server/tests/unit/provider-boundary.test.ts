@@ -95,4 +95,30 @@ describe('SDK provider boundary', () => {
     expect(String(error)).not.toContain('123456789');
     expect(String(error)).not.toContain('secret-token');
   });
+
+  it('redacts a secret-bearing SDK client factory failure', async () => {
+    const factory = vi.fn(() => {
+      throw new Error('account 123456789 bearer secret-token');
+    });
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    let error: unknown;
+    try {
+      await new SdkMcpTransport({
+        endpoint: 'https://mcp.example.test/read',
+        approvedEndpointOrigins: ['https://mcp.example.test'],
+        authProvider: { token: async () => undefined },
+        clientFactory: factory,
+      }).call('get_accounts', {});
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ code: 'provider_http_error' });
+    expect(String(error)).not.toContain('123456789');
+    expect(String(error)).not.toContain('secret-token');
+  });
 });

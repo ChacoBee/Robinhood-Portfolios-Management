@@ -4,9 +4,11 @@ import { parseEnvironment } from './config';
 import { createPostgresClient } from './db/client';
 import { createRepositories } from './db/repositories';
 import { RobinhoodReadClient } from './robinhood/client';
-import { SdkMcpTransport } from './robinhood/transport';
+import {
+  SdkMcpTransport,
+  type RobinhoodAuthProvider,
+} from './robinhood/transport';
 import { AesGcmAccountReferenceVault } from './robinhood/vault';
-import type { AuthProvider } from '@modelcontextprotocol/client';
 import { RefreshService } from './sync/refresh-service';
 import { resolveUsEquitySession } from './sync/market-calendar';
 import { runRefreshWorkerLoop } from './sync/worker-loop';
@@ -20,7 +22,7 @@ import {
 export interface TrustedRobinhoodWorkerComposition {
   endpoint: string;
   approvedEndpointOrigins: readonly string[];
-  authProvider: AuthProvider;
+  authProvider: RobinhoodAuthProvider;
   afterSnapshotPromoted: (input: {
     userId: string;
     snapshotId: string;

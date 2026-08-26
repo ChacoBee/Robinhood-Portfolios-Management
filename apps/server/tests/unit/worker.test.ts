@@ -1,5 +1,24 @@
+import type { OAuthClientProvider } from '@modelcontextprotocol/client';
 import { describe, expect, it } from 'vitest';
-import { startWorker } from '../../src/worker';
+import {
+  startWorker,
+  type TrustedRobinhoodWorkerComposition,
+} from '../../src/worker';
+
+const oauthProvider = {
+  get redirectUrl() {
+    return undefined;
+  },
+  get clientMetadata() {
+    return { redirect_uris: [] };
+  },
+  clientInformation: () => undefined,
+  tokens: () => undefined,
+  saveTokens: async () => undefined,
+  redirectToAuthorization: async () => undefined,
+  saveCodeVerifier: async () => undefined,
+  codeVerifier: () => '',
+} satisfies OAuthClientProvider;
 
 describe('connected worker composition', () => {
   it('fails closed without an injected verified authorization composition', async () => {
@@ -22,7 +41,13 @@ describe('connected worker composition', () => {
     ).rejects.toThrow('verified_robinhood_authorization_required');
   });
 
-  it('fails closed when post-promotion alert evaluation is not composed', async () => {
+  it('accepts an OAuth client provider composition before enforcing alert composition', async () => {
+    const composition: Omit<TrustedRobinhoodWorkerComposition, 'afterSnapshotPromoted'> = {
+      endpoint: 'https://mcp.example.test',
+      approvedEndpointOrigins: ['https://mcp.example.test'],
+      authProvider: oauthProvider,
+    };
+
     await expect(
       startWorker(
         {
@@ -40,27 +65,7 @@ describe('connected worker composition', () => {
             'base64',
           ),
         },
-        {
-          endpoint: 'https://mcp.example.test',
-          approvedEndpointOrigins: ['https://mcp.example.test'],
-          expectedIssuer: 'https://issuer.example.test',
-          expectedAudience: 'aurum-test',
-          authorizationProvider: {
-            getAuthorization: async () => ({
-              accessToken: 'synthetic-token',
-              issuer: 'https://issuer.example.test',
-              audience: 'aurum-test',
-              expiresAt: new Date(Date.now() + 60_000).toISOString(),
-              scopes: [
-                'accounts:read',
-                'portfolio:read',
-                'positions:read',
-                'quotes:read',
-              ],
-              endpoint: 'https://mcp.example.test',
-            }),
-          },
-        } as never,
+        composition as TrustedRobinhoodWorkerComposition,
       ),
     ).rejects.toThrow('alert_evaluation_composition_required');
   });

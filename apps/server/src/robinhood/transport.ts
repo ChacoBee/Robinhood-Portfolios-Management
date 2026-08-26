@@ -1,5 +1,7 @@
 import {
   Client,
+  SdkError,
+  SdkErrorCode,
   StreamableHTTPClientTransport,
   type AuthProvider,
   type CallToolResult,
@@ -13,6 +15,8 @@ import {
 import { ProviderBoundaryError } from './errors';
 
 const toolTimeoutMs = 15_000;
+
+export type RobinhoodAuthProvider = AuthProvider | OAuthClientProvider;
 
 export interface McpTransport {
   call<T>(
@@ -36,7 +40,7 @@ export interface McpSdkClient {
 
 export interface McpClientFactoryInput {
   endpoint: URL;
-  authProvider: AuthProvider | OAuthClientProvider;
+  authProvider: RobinhoodAuthProvider;
 }
 
 export type McpClientFactory = (input: McpClientFactoryInput) => McpSdkClient;
@@ -44,7 +48,7 @@ export type McpClientFactory = (input: McpClientFactoryInput) => McpSdkClient;
 export interface SdkMcpTransportOptions {
   endpoint: string;
   approvedEndpointOrigins: readonly string[];
-  authProvider: AuthProvider | OAuthClientProvider;
+  authProvider: RobinhoodAuthProvider;
   clientFactory?: McpClientFactory;
 }
 
@@ -115,6 +119,17 @@ function structuredData(result: CallToolResult): unknown {
   return (content as { data: unknown }).data;
 }
 
+function providerFailure(error: unknown): ProviderBoundaryError {
+  if (
+    (error instanceof SdkError && error.code === SdkErrorCode.RequestTimeout) ||
+    (error instanceof Error &&
+      (error.name === 'AbortError' || error.name === 'TimeoutError'))
+  ) {
+    return new ProviderBoundaryError('provider_timeout');
+  }
+  return new ProviderBoundaryError('provider_http_error');
+}
+
 export class SdkMcpTransport implements McpTransport {
   private readonly endpoint: URL;
   private readonly clientFactory: McpClientFactory;
@@ -130,7 +145,7 @@ export class SdkMcpTransport implements McpTransport {
     this.authProvider = options.authProvider;
   }
 
-  private readonly authProvider: AuthProvider | OAuthClientProvider;
+  private readonly authProvider: RobinhoodAuthProvider;
 
   async connect(): Promise<void> {
     await this.connectedClient();
@@ -150,9 +165,12 @@ export class SdkMcpTransport implements McpTransport {
       );
     } catch (error) {
       if (error instanceof ProviderBoundaryError) throw error;
-      throw new ProviderBoundaryError('provider_http_error');
+      throw providerFailure(error);
     }
 
+    if (result.isError === true) {
+      throw new ProviderBoundaryError('provider_protocol_error');
+    }
     return structuredData(result) as T;
   }
 
@@ -177,11 +195,12 @@ export class SdkMcpTransport implements McpTransport {
   }
 
   private async initializeClient(): Promise<McpSdkClient> {
-    const client = this.clientFactory({
-      endpoint: this.endpoint,
-      authProvider: this.authProvider,
-    });
+    let client: McpSdkClient | undefined;
     try {
+      client = this.clientFactory({
+        endpoint: this.endpoint,
+        authProvider: this.authProvider,
+      });
       await client.connect();
       const advertised = new Set((await client.listTools()).tools.map((tool) => tool.name));
       if (allowedRobinhoodTools.some((tool) => !advertised.has(tool))) {
@@ -190,13 +209,15 @@ export class SdkMcpTransport implements McpTransport {
       this.client = client;
       return client;
     } catch (error) {
-      try {
-        await client.close();
-      } catch {
-        // The original initialization error is the useful, already-redacted boundary error.
+      if (client) {
+        try {
+          await client.close();
+        } catch {
+          // The original initialization error is the useful, already-redacted boundary error.
+        }
       }
       if (error instanceof ProviderBoundaryError) throw error;
-      throw new ProviderBoundaryError('provider_http_error');
+      throw providerFailure(error);
     } finally {
       this.connection = undefined;
     }

@@ -1,3 +1,4 @@
+import { SdkError, SdkErrorCode } from '@modelcontextprotocol/client';
 import { describe, expect, it, vi } from 'vitest';
 import { allowedRobinhoodTools } from '../../src/robinhood/read-methods';
 import * as transportModule from '../../src/robinhood/transport';
@@ -160,5 +161,62 @@ describe('SDK MCP transport lifecycle', () => {
     await expect(
       new SdkMcpTransport(options(() => client)).call('get_accounts', {}),
     ).rejects.toMatchObject({ code: 'provider_protocol_error' });
+  });
+
+  it('maps an SDK request timeout to the safe timeout boundary error', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => {
+        throw new SdkError(
+          SdkErrorCode.RequestTimeout,
+          'account 123456789 bearer secret-token',
+        );
+      }),
+      close: vi.fn(async () => undefined),
+    };
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    let error: unknown;
+    try {
+      await new SdkMcpTransport(options(() => client)).call('get_accounts', {});
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ code: 'provider_timeout' });
+    expect(String(error)).not.toContain('123456789');
+    expect(String(error)).not.toContain('secret-token');
+  });
+
+  it('rejects an error tool result instead of returning its structured data', async () => {
+    const client: AdapterClient = {
+      connect: vi.fn(async () => undefined),
+      listTools: vi.fn(async () => advertisedTools()),
+      callTool: vi.fn(async () => ({
+        isError: true,
+        content: [{ type: 'text', text: 'account 123456789 bearer secret-token' }],
+        structuredContent: { data: { results: ['must-not-return'] } },
+      })),
+      close: vi.fn(async () => undefined),
+    };
+    const SdkMcpTransport = constructorUnderTest();
+
+    expect(SdkMcpTransport).toBeTypeOf('function');
+    if (!SdkMcpTransport) return;
+
+    let error: unknown;
+    try {
+      await new SdkMcpTransport(options(() => client)).call('get_accounts', {});
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(error).toMatchObject({ code: 'provider_protocol_error' });
+    expect(String(error)).not.toContain('123456789');
+    expect(String(error)).not.toContain('secret-token');
   });
 });
