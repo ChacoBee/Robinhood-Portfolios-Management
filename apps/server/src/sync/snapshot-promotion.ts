@@ -20,6 +20,13 @@ import {
   type ValuationSessionPhase,
 } from './freshness-policy';
 
+export function isRegularCloseCheckpoint(asOf: string, lastRegularCloseAt: string | null | undefined): boolean {
+  if (!lastRegularCloseAt) return false;
+  const checkpoint = Date.parse(lastRegularCloseAt) + 5 * 60_000;
+  const observed = Date.parse(asOf);
+  return Number.isFinite(observed) && observed >= checkpoint && observed < checkpoint + 4 * 60 * 60_000;
+}
+
 export interface AccountRefreshBundle {
   account: AccountObservation;
   portfolio: AccountValueObservation;
@@ -444,7 +451,7 @@ export function buildSnapshotPromotion(
     : 'complete';
   const totalValue = sumMoney(included.map((account) => usd(account.providerTotal)));
   const unsupportedDetailValue = sumMoney(included.map((account) => usd(account.unsupportedDetailValue)));
-  const marketStates = new Set(details.flatMap((account) => account.quotes.map((quote) => quote.marketState)));
+  const marketStates = new Set(included.flatMap((account) => account.quotes.map((quote) => quote.marketState)));
   const sourceFingerprint = canonicalFingerprint(details);
 
   return {
@@ -480,8 +487,8 @@ export function buildSnapshotPromotion(
       ).amount,
       quality: {
         mixedMarketState: marketStates.size > 1,
-        unsupportedWeight: new Decimal(unsupportedDetailValue.amount).div(totalValue.amount).toFixed(),
-        regularSessionCloseEligible: input.phase === 'closed' && input.lastRegularCloseAt != null && freshness.asOf >= input.lastRegularCloseAt,
+        unsupportedWeight: new Decimal(totalValue.amount).isZero() ? '1' : new Decimal(unsupportedDetailValue.amount).div(totalValue.amount).toFixed(),
+        regularSessionCloseEligible: isRegularCloseCheckpoint(freshness.asOf, input.lastRegularCloseAt),
       },
       sourceWindow: {
         start: freshness.sourceWindowStart,

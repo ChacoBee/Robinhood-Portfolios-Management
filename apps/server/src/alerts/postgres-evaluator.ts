@@ -64,6 +64,7 @@ export function createPostgresAlertEvaluator(options: { database: DatabaseClient
           if (currentRule.kind === 'holding_percentage_move' && currentRule.scope.id) {
             const [a, b] = await Promise.all([options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [snapshot.sync_run_id, currentRule.scope.id]), options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [prior.sync_run_id, currentRule.scope.id])]);
             current = dec(a.rows[0]?.amount); baseline = dec(b.rows[0]?.amount);
+            result.observedRatio = null;
           }
           const flows = currentRule.kind === 'holding_percentage_move' ? null : await options.database.query<Scalar>('select sum(amount) as amount from transactions where user_id = $1 and effective_at > $2 and effective_at <= $3 and kind in (\'deposit\', \'withdrawal\')', [input.userId, prior.as_of, snapshot.as_of]);
           const flow = dec(flows?.rows[0]?.amount) ?? new Decimal(0);

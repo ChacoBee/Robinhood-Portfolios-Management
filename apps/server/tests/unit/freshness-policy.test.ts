@@ -1,7 +1,94 @@
 import { describe, expect, it } from 'vitest';
+import { usd } from '@aurum/domain';
 import { evaluateSourceFreshness } from '../../src/sync/freshness-policy';
+import {
+  buildSnapshotPromotion,
+  isRegularCloseCheckpoint,
+  type AccountRefreshBundle,
+} from '../../src/sync/snapshot-promotion';
+
+function promotionBundle(input: {
+  stableKey: string;
+  status: 'active' | 'closed';
+  total: string;
+  marketState?: 'regular' | 'extended' | 'closed' | 'unknown';
+}): AccountRefreshBundle {
+  const at = '2026-08-25T20:05:00.000Z';
+  return {
+    account: {
+      providerRef: `sealed-${input.stableKey}` as never,
+      stableKey: input.stableKey as never,
+      maskedAccountNumber: null,
+      displayName: input.stableKey,
+      status: input.status,
+      totalKind: 'net_liquidation_value',
+      sourceAsOf: at,
+    },
+    portfolio: {
+      providerRef: `sealed-${input.stableKey}` as never,
+      stableKey: input.stableKey as never,
+      total: { state: 'available', value: usd(input.total) },
+      cash: { state: 'available', value: usd(input.total) },
+      accrued: { state: 'available', value: usd('0') },
+      currency: 'USD',
+      sourceAsOf: at,
+    },
+    equityPositions: [],
+    optionPositions: [],
+    quotes: input.marketState
+      ? [{
+          instrumentId: `instrument-${input.stableKey}`,
+          symbol: input.stableKey,
+          price: usd('1'),
+          currency: 'USD',
+          marketState: input.marketState,
+          sourceAsOf: at,
+          quality: 'complete',
+        }]
+      : [],
+  };
+}
 
 describe('valuation source freshness', () => {
+  it('recognizes only the scheduled 4:05pm ET close checkpoint window', () => {
+    expect(isRegularCloseCheckpoint('2026-08-25T20:05:00.000Z', '2026-08-25T20:00:00.000Z')).toBe(true);
+    expect(isRegularCloseCheckpoint('2026-08-26T00:05:00.000Z', '2026-08-25T20:00:00.000Z')).toBe(false);
+  });
+
+  it('derives promotion quality only from included accounts and conservatively represents zero totals', () => {
+    const input = {
+      syncRunId: 'run-1',
+      receivedAt: '2026-08-25T20:05:00.000Z',
+      phase: 'extended' as const,
+      lastRegularCloseAt: '2026-08-25T20:00:00.000Z',
+    };
+    const includedOnly = buildSnapshotPromotion({
+      ...input,
+      bundles: [
+        promotionBundle({ stableKey: 'active', status: 'active', total: '100', marketState: 'regular' }),
+        promotionBundle({ stableKey: 'excluded', status: 'closed', total: '0', marketState: 'extended' }),
+      ],
+    });
+    const zeroTotal = buildSnapshotPromotion({
+      ...input,
+      bundles: [promotionBundle({ stableKey: 'zero', status: 'active', total: '0' })],
+    });
+
+    expect(includedOnly.payload).toMatchObject({
+      quality: {
+        mixedMarketState: false,
+        unsupportedWeight: '0',
+        regularSessionCloseEligible: true,
+      },
+    });
+    expect(zeroTotal.payload).toMatchObject({
+      quality: {
+        mixedMarketState: false,
+        unsupportedWeight: '1',
+        regularSessionCloseEligible: true,
+      },
+    });
+  });
   it('accepts the regular-session 120-second boundary and rejects 121 seconds', () => {
     const base = {
       receivedAt: '2026-08-25T14:02:00.000Z',
