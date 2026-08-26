@@ -57,7 +57,7 @@ export function createPostgresAlertEvaluator(options: { database: DatabaseClient
           await options.alerts.appendEvent({ id: randomUUID(), ruleId: evaluation.ruleId, snapshotId: input.snapshotId, fingerprint: evaluation.fingerprint, state: evaluation.state, evidence: publicAlertEvidence(evaluation) });
           continue;
         }
-        const history = await options.database.query<Snapshot>(currentRule.baseline === 'prior_regular_session_close' ? 'select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' and freshness = \'fresh\' order by as_of desc limit 1' : 'select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' order by as_of desc limit 1', [input.userId, snapshot.as_of]);
+        const history = await options.database.query<Snapshot>(currentRule.baseline === 'prior_regular_session_close' ? 'select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' and payload->\'quality\'->>\'regularSessionCloseEligible\' = \'true\' order by as_of desc limit 1' : 'select id, sync_run_id, total_value, as_of, coverage, freshness, reconciliation_status, payload from portfolio_snapshots where user_id = $1 and as_of < $2 and coverage = \'complete\' and reconciliation_status = \'reconciled\' order by as_of desc limit 1', [input.userId, snapshot.as_of]);
         const prior = history.rows[0];
         if (prior) {
           let current = currentRule.kind === 'holding_percentage_move' ? null : total, baseline = currentRule.kind === 'holding_percentage_move' ? null : dec(prior.total_value);
@@ -65,10 +65,9 @@ export function createPostgresAlertEvaluator(options: { database: DatabaseClient
             const [a, b] = await Promise.all([options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [snapshot.sync_run_id, currentRule.scope.id]), options.database.query<Scalar>('select sum(provider_market_value) as amount from position_observations where sync_run_id = $1 and security_id = $2', [prior.sync_run_id, currentRule.scope.id])]);
             current = dec(a.rows[0]?.amount); baseline = dec(b.rows[0]?.amount);
           }
-          if (currentRule.kind === 'holding_percentage_move') { current = null; baseline = null; }
-          const flows = await options.database.query<Scalar>('select sum(amount) as amount from transactions where user_id = $1 and effective_at > $2 and effective_at <= $3 and kind in (\'deposit\', \'withdrawal\')', [input.userId, prior.as_of, snapshot.as_of]);
-          const flow = dec(flows.rows[0]?.amount) ?? new Decimal(0);
-          if (current && baseline) { result.baselineObservationId = prior.id; result.flowAdjustment = money(flow); result.baselineMoney = money(baseline.plus(flow)); result.observedMoney = money(current); if (currentRule.kind !== 'material_value_change' && !baseline.isZero()) result.observedRatio = ratio(current.minus(baseline).minus(flow).div(baseline.abs()).toFixed()); }
+          const flows = currentRule.kind === 'holding_percentage_move' ? null : await options.database.query<Scalar>('select sum(amount) as amount from transactions where user_id = $1 and effective_at > $2 and effective_at <= $3 and kind in (\'deposit\', \'withdrawal\')', [input.userId, prior.as_of, snapshot.as_of]);
+          const flow = dec(flows?.rows[0]?.amount) ?? new Decimal(0);
+          if (current && baseline) { result.baselineObservationId = prior.id; result.flowAdjustment = currentRule.kind === 'holding_percentage_move' ? null : money(flow); result.baselineMoney = money(currentRule.kind === 'holding_percentage_move' ? baseline : baseline.plus(flow)); result.observedMoney = money(current); if (currentRule.kind !== 'material_value_change' && !baseline.isZero()) result.observedRatio = ratio(current.minus(baseline).minus(flow).div(baseline.abs()).toFixed()); }
         }
       }
       const evaluation = evaluateAlertRule(currentRule, result);

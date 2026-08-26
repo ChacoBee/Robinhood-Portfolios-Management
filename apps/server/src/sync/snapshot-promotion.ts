@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import Decimal from 'decimal.js';
 import {
   compareMoney,
   reconcileAccount,
@@ -442,6 +443,8 @@ export function buildSnapshotPromotion(
     ? 'partial_known_unsupported'
     : 'complete';
   const totalValue = sumMoney(included.map((account) => usd(account.providerTotal)));
+  const unsupportedDetailValue = sumMoney(included.map((account) => usd(account.unsupportedDetailValue)));
+  const marketStates = new Set(details.flatMap((account) => account.quotes.map((quote) => quote.marketState)));
   const sourceFingerprint = canonicalFingerprint(details);
 
   return {
@@ -475,6 +478,11 @@ export function buildSnapshotPromotion(
       unsupportedDetailValue: sumMoney(
         included.map((account) => usd(account.unsupportedDetailValue)),
       ).amount,
+      quality: {
+        mixedMarketState: marketStates.size > 1,
+        unsupportedWeight: new Decimal(unsupportedDetailValue.amount).div(totalValue.amount).toFixed(),
+        regularSessionCloseEligible: input.phase === 'closed' && input.lastRegularCloseAt != null && freshness.asOf >= input.lastRegularCloseAt,
+      },
       sourceWindow: {
         start: freshness.sourceWindowStart,
         end: freshness.sourceWindowEnd,
