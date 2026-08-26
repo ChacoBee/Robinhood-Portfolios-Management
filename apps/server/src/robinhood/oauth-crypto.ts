@@ -67,8 +67,12 @@ export class AesGcmOAuthCrypto {
 
   open(context: OAuthEncryptionContext, envelope: string): Record<string, unknown> {
     try {
-      const [version, noncePart, ciphertextPart, tagPart, extra] = envelope.split('.');
-      if (version !== 'v1' || !noncePart || !ciphertextPart || !tagPart || extra) {
+      const parts = envelope.split('.');
+      if (parts.length !== 4) {
+        throw new Error('invalid envelope');
+      }
+      const [version, noncePart, ciphertextPart, tagPart] = parts;
+      if (version !== 'v1' || !noncePart || !ciphertextPart || !tagPart) {
         throw new Error('invalid envelope');
       }
       const nonce = decodeCanonicalBase64url(noncePart);

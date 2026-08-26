@@ -55,4 +55,16 @@ describe('Robinhood OAuth credential encryption', () => {
       'oauth_credentials_invalid',
     );
   });
+
+  it.each(['.', '..'])(
+    'rejects trailing empty envelope segments %s',
+    (suffix) => {
+      const crypto = new AesGcmOAuthCrypto(encryptionKey);
+      const envelope = crypto.seal(context, { tokenType: 'synthetic' });
+
+      expect(() => crypto.open(context, `${envelope}${suffix}`)).toThrow(
+        'oauth_credentials_invalid',
+      );
+    },
+  );
 });
